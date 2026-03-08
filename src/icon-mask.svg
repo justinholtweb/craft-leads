@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Browser window -->
+  <rect x="4" y="12" width="92" height="76" rx="6" ry="6" fill="currentColor"/>
+  <!-- Popup box (cutout effect) -->
+  <rect x="20" y="38" width="60" height="42" rx="4" ry="4" fill="currentColor"/>
+</svg>

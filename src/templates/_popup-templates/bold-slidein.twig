@@ -1,0 +1,21 @@
+<div class="leads-popup leads-slidein leads-bold" data-leads-id="{{ popup.id }}" style="background-color: {{ popup.backgroundColor ?? '#1e293b' }};">
+    <button class="leads-close" data-leads-close aria-label="Close">&times;</button>
+    {% if popup.heading %}
+        <h3 class="leads-heading" style="color: #ffffff;">{{ popup.heading }}</h3>
+    {% endif %}
+    {% if popup.bodyText %}
+        <p class="leads-body" style="color: #cbd5e1;">{{ popup.bodyText }}</p>
+    {% endif %}
+    <form class="leads-form" data-leads-form>
+        <input type="hidden" name="popupId" value="{{ popup.id }}">
+        {% for field in popup.getFormFieldsArray() %}
+            <input type="{{ field.type ?? 'text' }}" name="{{ field.name }}" placeholder="{{ field.placeholder ?? '' }}" {% if field.required ?? false %}required{% endif %} class="leads-input">
+        {% else %}
+            <input type="email" name="email" placeholder="Enter your email" required class="leads-input">
+        {% endfor %}
+        <button type="submit" class="leads-btn leads-btn-bold" style="background-color: {{ popup.buttonColor ?? '#3b82f6' }}">{{ popup.buttonText ?? 'Subscribe' }}</button>
+    </form>
+    <div class="leads-success" style="display:none;">
+        <p style="color: #ffffff;">Thanks for subscribing!</p>
+    </div>
+</div>

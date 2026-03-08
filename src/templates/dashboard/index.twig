@@ -1,0 +1,40 @@
+{% extends 'leads/_layouts/plugin' %}
+
+{% set title = 'Dashboard'|t('leads') %}
+{% set selectedSubnavItem = 'dashboard' %}
+
+{% block pluginContent %}
+    <div class="flex" style="gap: 24px; margin-bottom: 24px;">
+        <div class="flex-grow" style="background: var(--gray-050); padding: 24px; border-radius: 8px;">
+            <h3 style="margin: 0 0 8px; color: var(--gray-500);">{{ 'Impressions'|t('leads') }}</h3>
+            <div style="font-size: 2em; font-weight: bold;">{{ overview.impressions|number_format }}</div>
+        </div>
+        <div class="flex-grow" style="background: var(--gray-050); padding: 24px; border-radius: 8px;">
+            <h3 style="margin: 0 0 8px; color: var(--gray-500);">{{ 'Conversions'|t('leads') }}</h3>
+            <div style="font-size: 2em; font-weight: bold;">{{ overview.conversions|number_format }}</div>
+        </div>
+        <div class="flex-grow" style="background: var(--gray-050); padding: 24px; border-radius: 8px;">
+            <h3 style="margin: 0 0 8px; color: var(--gray-500);">{{ 'Conversion Rate'|t('leads') }}</h3>
+            <div style="font-size: 2em; font-weight: bold;">{{ overview.conversionRate }}%</div>
+        </div>
+        <div class="flex-grow" style="background: var(--gray-050); padding: 24px; border-radius: 8px;">
+            <h3 style="margin: 0 0 8px; color: var(--gray-500);">{{ 'Total Submissions'|t('leads') }}</h3>
+            <div style="font-size: 2em; font-weight: bold;">{{ totalSubmissions|number_format }}</div>
+        </div>
+    </div>
+
+    <div style="background: var(--gray-050); padding: 24px; border-radius: 8px;">
+        <h3>{{ 'Date Range'|t('leads') }}</h3>
+        <form method="get" class="flex" style="gap: 12px; align-items: flex-end;">
+            <div>
+                <label for="startDate">{{ 'From'|t('leads') }}</label>
+                <input type="date" id="startDate" name="startDate" value="{{ startDate }}" class="text">
+            </div>
+            <div>
+                <label for="endDate">{{ 'To'|t('leads') }}</label>
+                <input type="date" id="endDate" name="endDate" value="{{ endDate }}" class="text">
+            </div>
+            <button type="submit" class="btn">{{ 'Filter'|t('leads') }}</button>
+        </form>
+    </div>
+{% endblock %}

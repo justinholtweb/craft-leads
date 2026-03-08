@@ -1,0 +1,20 @@
+<div class="leads-popup leads-bar leads-clean" data-leads-id="{{ popup.id }}" style="background-color: {{ popup.backgroundColor ?? '#1e293b' }};">
+    <div class="leads-bar-inner">
+        {% if popup.heading %}
+            <span class="leads-heading">{{ popup.heading }}</span>
+        {% endif %}
+        <form class="leads-form leads-form-inline" data-leads-form>
+            <input type="hidden" name="popupId" value="{{ popup.id }}">
+            {% for field in popup.getFormFieldsArray() %}
+                <input type="{{ field.type ?? 'text' }}" name="{{ field.name }}" placeholder="{{ field.placeholder ?? '' }}" {% if field.required ?? false %}required{% endif %} class="leads-input">
+            {% else %}
+                <input type="email" name="email" placeholder="Enter your email" required class="leads-input">
+            {% endfor %}
+            <button type="submit" class="leads-btn" style="background-color: {{ popup.buttonColor ?? '#3b82f6' }}">{{ popup.buttonText ?? 'Subscribe' }}</button>
+        </form>
+        <button class="leads-close" data-leads-close aria-label="Close">&times;</button>
+    </div>
+    <div class="leads-success" style="display:none;">
+        <p>Thanks for subscribing!</p>
+    </div>
+</div>

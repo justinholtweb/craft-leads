@@ -1,0 +1,82 @@
+{% extends 'leads/_layouts/plugin' %}
+
+{% set title = 'Leads Settings'|t('leads') %}
+{% set selectedSubnavItem = 'settings' %}
+{% set fullPageForm = true %}
+
+{% block pluginContent %}
+    <input type="hidden" name="action" value="leads/settings/save">
+    {{ redirectInput('leads/settings') }}
+
+    <div id="fields">
+        <h2>{{ 'General'|t('leads') }}</h2>
+
+        {{ forms.lightswitchField({
+            label: 'Auto-Inject Script'|t('leads'),
+            instructions: 'Automatically inject the popup script on all frontend pages. Disable to use the manual {{ leadsPopups() }} Twig function.'|t('leads'),
+            id: 'autoInjectScript',
+            name: 'settings[autoInjectScript]',
+            on: settings.autoInjectScript,
+        }) }}
+
+        <hr>
+
+        <h2>{{ 'Defaults'|t('leads') }}</h2>
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.colorField({
+                    label: 'Default Button Color'|t('leads'),
+                    id: 'defaultButtonColor',
+                    name: 'settings[defaultButtonColor]',
+                    value: settings.defaultButtonColor,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.colorField({
+                    label: 'Default Background Color'|t('leads'),
+                    id: 'defaultBackgroundColor',
+                    name: 'settings[defaultBackgroundColor]',
+                    value: settings.defaultBackgroundColor,
+                }) }}
+            </div>
+        </div>
+
+        <hr>
+
+        <h2>{{ 'Spam Protection'|t('leads') }}</h2>
+
+        {{ forms.lightswitchField({
+            label: 'Enable Honeypot'|t('leads'),
+            instructions: 'Adds a hidden field to catch spam bots.'|t('leads'),
+            id: 'enableHoneypot',
+            name: 'settings[enableHoneypot]',
+            on: settings.enableHoneypot,
+        }) }}
+
+        {{ forms.textField({
+            label: 'Rate Limit Per Minute'|t('leads'),
+            instructions: 'Maximum form submissions per IP per minute.'|t('leads'),
+            id: 'rateLimitPerMinute',
+            name: 'settings[rateLimitPerMinute]',
+            value: settings.rateLimitPerMinute,
+            type: 'number',
+            min: 1,
+            max: 60,
+        }) }}
+
+        <hr>
+
+        <h2>{{ 'Data'|t('leads') }}</h2>
+
+        {{ forms.textField({
+            label: 'Data Retention (Days)'|t('leads'),
+            instructions: 'Number of days to keep submission data. Set to 0 to keep forever.'|t('leads'),
+            id: 'dataRetentionDays',
+            name: 'settings[dataRetentionDays]',
+            value: settings.dataRetentionDays,
+            type: 'number',
+            min: 0,
+        }) }}
+    </div>
+{% endblock %}

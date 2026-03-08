@@ -1,0 +1,35 @@
+{
+    "name": "justinholtweb/craft-leads",
+    "description": "Popup and lead generation plugin for Craft CMS 5. Create modals, slide-ins, notification bars, and inline forms with targeting rules, email integrations, and analytics.",
+    "type": "craft-plugin",
+    "license": "proprietary",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "craftcms/cms": "^5.3.0"
+    },
+    "require-dev": {
+        "codeception/codeception": "^5.0",
+        "craftcms/ecs": "dev-main",
+        "craftcms/phpstan": "dev-main"
+    },
+    "autoload": {
+        "psr-4": {
+            "justinholtweb\\leads\\": "src/"
+        }
+    },
+    "support": {
+        "issues": "https://github.com/justinholtweb/craft-leads/issues",
+        "source": "https://github.com/justinholtweb/craft-leads"
+    },
+    "extra": {
+        "handle": "leads",
+        "name": "Leads",
+        "developer": "Justin Holt",
+        "developerUrl": "https://github.com/justinholtweb",
+        "documentationUrl": "https://github.com/justinholtweb/craft-leads",
+        "description": "Popup and lead generation plugin for Craft CMS.",
+        "class": "justinholtweb\\leads\\Plugin"
+    }
+}

@@ -1,0 +1,68 @@
+{% extends 'leads/_layouts/plugin' %}
+
+{% set title = 'Submissions'|t('leads') %}
+{% set selectedSubnavItem = 'submissions' %}
+
+{% block pluginContent %}
+    <div style="margin-bottom: 16px;">
+        <p class="light">{{ 'Total: {count} submissions'|t('leads', { count: total }) }}</p>
+        {% if currentUser.can('leads:exportSubmissions') %}
+            <a href="{{ url('leads/submissions/export', { popupId: popupId }) }}" class="btn">{{ 'Export CSV'|t('leads') }}</a>
+        {% endif %}
+    </div>
+
+    {% if submissions|length %}
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ 'Email'|t('leads') }}</th>
+                    <th>{{ 'Name'|t('leads') }}</th>
+                    <th>{{ 'Page URL'|t('leads') }}</th>
+                    <th>{{ 'Sync Status'|t('leads') }}</th>
+                    <th>{{ 'Date'|t('leads') }}</th>
+                    {% if currentUser.can('leads:deleteSubmissions') %}
+                        <th></th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for submission in submissions %}
+                    <tr>
+                        <td>{{ submission.email }}</td>
+                        <td>{{ submission.name ?? '—' }}</td>
+                        <td>{{ submission.pageUrl }}</td>
+                        <td>
+                            <span class="status {{ submission.syncStatus == 'synced' ? 'green' : (submission.syncStatus == 'failed' ? 'red' : 'orange') }}"></span>
+                            {{ submission.syncStatus|capitalize }}
+                        </td>
+                        <td>{{ submission.dateCreated }}</td>
+                        {% if currentUser.can('leads:deleteSubmissions') %}
+                            <td>
+                                <form method="post" style="display:inline">
+                                    {{ csrfInput() }}
+                                    <input type="hidden" name="action" value="leads/submissions/delete">
+                                    <input type="hidden" name="id" value="{{ submission.id }}">
+                                    {{ redirectInput('leads/submissions') }}
+                                    <button type="submit" class="btn small" onclick="return confirm('Are you sure?')">{{ 'Delete'|t('leads') }}</button>
+                                </form>
+                            </td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if total > limit %}
+            <div style="margin-top: 16px; text-align: center;">
+                {% if page > 1 %}
+                    <a href="{{ url('leads/submissions', { page: page - 1, popupId: popupId }) }}" class="btn">&laquo; {{ 'Previous'|t('leads') }}</a>
+                {% endif %}
+                {% if (page * limit) < total %}
+                    <a href="{{ url('leads/submissions', { page: page + 1, popupId: popupId }) }}" class="btn">{{ 'Next'|t('leads') }} &raquo;</a>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% else %}
+        <p class="zilch">{{ 'No submissions yet.'|t('leads') }}</p>
+    {% endif %}
+{% endblock %}

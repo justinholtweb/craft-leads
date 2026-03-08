@@ -1,0 +1,35 @@
+/* Leads — CP Styles */
+
+.leads-preview-container {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 24px;
+    margin-top: 16px;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.leads-stat-card {
+    background: var(--gray-050);
+    padding: 24px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.leads-stat-card h3 {
+    margin: 0 0 8px;
+    color: var(--gray-500);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.leads-stat-card .leads-stat-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: var(--text-color);
+}

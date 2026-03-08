@@ -1,0 +1,205 @@
+{% extends 'leads/_layouts/plugin' %}
+
+{% set selectedSubnavItem = 'popups' %}
+{% set fullPageForm = true %}
+
+{% block pluginContent %}
+    <input type="hidden" name="action" value="leads/popups/save">
+    {{ redirectInput('leads/popups') }}
+
+    {% if not isNew %}
+        <input type="hidden" name="popupId" value="{{ popup.id }}">
+    {% endif %}
+
+    <div id="fields">
+        {{ forms.textField({
+            label: 'Title'|t('leads'),
+            instructions: 'Internal name for this popup.'|t('leads'),
+            id: 'title',
+            name: 'title',
+            value: popup.title,
+            errors: popup.getErrors('title'),
+            required: true,
+            first: true,
+        }) }}
+
+        <hr>
+
+        <h2>{{ 'Popup Settings'|t('leads') }}</h2>
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.selectField({
+                    label: 'Popup Type'|t('leads'),
+                    id: 'popupType',
+                    name: 'popupType',
+                    value: popup.popupType,
+                    options: popupTypeOptions,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.selectField({
+                    label: 'Status'|t('leads'),
+                    id: 'popupStatus',
+                    name: 'popupStatus',
+                    value: popup.popupStatus,
+                    options: statusOptions,
+                }) }}
+            </div>
+        </div>
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.selectField({
+                    label: 'Template'|t('leads'),
+                    id: 'templateKey',
+                    name: 'templateKey',
+                    value: popup.templateKey,
+                    options: templateOptions,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.selectField({
+                    label: 'Position'|t('leads'),
+                    instructions: 'For bars and slide-ins.'|t('leads'),
+                    id: 'position',
+                    name: 'position',
+                    value: popup.position,
+                    options: positionOptions,
+                }) }}
+            </div>
+        </div>
+
+        {{ forms.textField({
+            label: 'Priority'|t('leads'),
+            instructions: 'Lower numbers display first when multiple popups match.'|t('leads'),
+            id: 'priority',
+            name: 'priority',
+            value: popup.priority,
+            type: 'number',
+            min: 0,
+        }) }}
+
+        <hr>
+
+        <h2>{{ 'Trigger'|t('leads') }}</h2>
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.selectField({
+                    label: 'Trigger Type'|t('leads'),
+                    id: 'triggerType',
+                    name: 'triggerType',
+                    value: popup.triggerType,
+                    options: triggerTypeOptions,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.textField({
+                    label: 'Trigger Value'|t('leads'),
+                    instructions: 'Seconds for time delay, percentage for scroll, CSS selector for click.'|t('leads'),
+                    id: 'triggerValue',
+                    name: 'triggerValue',
+                    value: popup.triggerValue,
+                }) }}
+            </div>
+        </div>
+
+        <hr>
+
+        <h2>{{ 'Content'|t('leads') }}</h2>
+
+        {{ forms.textField({
+            label: 'Heading'|t('leads'),
+            id: 'heading',
+            name: 'heading',
+            value: popup.heading,
+        }) }}
+
+        {{ forms.textareaField({
+            label: 'Body Text'|t('leads'),
+            id: 'bodyText',
+            name: 'bodyText',
+            value: popup.bodyText,
+            rows: 4,
+        }) }}
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.textField({
+                    label: 'Button Text'|t('leads'),
+                    id: 'buttonText',
+                    name: 'buttonText',
+                    value: popup.buttonText,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.colorField({
+                    label: 'Button Color'|t('leads'),
+                    id: 'buttonColor',
+                    name: 'buttonColor',
+                    value: popup.buttonColor,
+                }) }}
+            </div>
+        </div>
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.colorField({
+                    label: 'Background Color'|t('leads'),
+                    id: 'backgroundColor',
+                    name: 'backgroundColor',
+                    value: popup.backgroundColor,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.textField({
+                    label: 'Background Image URL'|t('leads'),
+                    id: 'backgroundImage',
+                    name: 'backgroundImage',
+                    value: popup.backgroundImage,
+                }) }}
+            </div>
+        </div>
+
+        {{ forms.textareaField({
+            label: 'Custom CSS'|t('leads'),
+            instructions: 'Additional CSS for this popup.'|t('leads'),
+            id: 'customCss',
+            name: 'customCss',
+            value: popup.customCss,
+            rows: 4,
+            class: 'code',
+        }) }}
+
+        <hr>
+
+        <h2>{{ 'Integration'|t('leads') }}</h2>
+
+        {{ forms.selectField({
+            label: 'Email Integration'|t('leads'),
+            id: 'integrationProvider',
+            name: 'integrationProvider',
+            value: popup.integrationProvider,
+            options: integrationOptions,
+        }) }}
+
+        <hr>
+
+        <h2>{{ 'Targeting Rules'|t('leads') }}</h2>
+
+        <p class="light">{{ 'Targeting rules will be configurable in a future update. Currently all active popups show on all pages.'|t('leads') }}</p>
+    </div>
+
+    {% if not isNew %}
+        <hr>
+        <div class="buttons">
+            <form method="post" style="display:inline">
+                {{ csrfInput() }}
+                <input type="hidden" name="action" value="leads/popups/duplicate">
+                <input type="hidden" name="popupId" value="{{ popup.id }}">
+                <button type="submit" class="btn">{{ 'Duplicate'|t('leads') }}</button>
+            </form>
+        </div>
+    {% endif %}
+{% endblock %}
