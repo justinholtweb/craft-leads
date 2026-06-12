@@ -23,7 +23,7 @@
         }
     ],
     "support": {
-        "docs": "https://github.com/justinholtweb/craft-leads/blob/main/README.md",
+        "docs": "https://craft-leads-plugin.com/docs",
         "issues": "https://github.com/justinholtweb/craft-leads/issues",
         "source": "https://github.com/justinholtweb/craft-leads"
     },
@@ -63,8 +63,8 @@
         "name": "Leads",
         "developer": "Justin Holt",
         "developerUrl": "https://justinholt.com",
-        "documentationUrl": "https://github.com/justinholtweb/craft-leads/blob/main/README.md",
-        "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-leads/main/CHANGELOG.md",
+        "documentationUrl": "https://craft-leads-plugin.com/docs",
+        "changelogUrl": "https://craft-leads-plugin.com/changelog",
         "description": "Popup and lead generation plugin for Craft CMS.",
         "hasCpSettings": true,
         "hasCpSection": true,

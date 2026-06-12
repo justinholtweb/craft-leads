@@ -5,22 +5,33 @@ namespace justinholtweb\leads\services;
 use Craft;
 use craft\base\Component;
 use craft\helpers\Json;
+use craft\web\View;
 use justinholtweb\leads\elements\Popup;
 
 class Renderer extends Component
 {
     public function renderPopup(Popup $popup): string
     {
-        $templateKey = $popup->templateKey ?? 'clean-modal';
+        $templateKey = $popup->templateKey ?: 'clean-modal';
         $templatePath = "leads/_popup-templates/{$templateKey}";
 
+        // Popup templates ship with the plugin, so they live under the CP
+        // template root. On a front-end (site) request the view defaults to
+        // site template mode and can't find them — render in CP mode and
+        // restore the previous mode afterward.
+        $view = Craft::$app->getView();
+        $previousMode = $view->getTemplateMode();
+
         try {
-            return Craft::$app->getView()->renderTemplate($templatePath, [
+            $view->setTemplateMode(View::TEMPLATE_MODE_CP);
+            return $view->renderTemplate($templatePath, [
                 'popup' => $popup,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Craft::error("Failed to render popup template: {$e->getMessage()}", 'leads');
             return '';
+        } finally {
+            $view->setTemplateMode($previousMode);
         }
     }
 
