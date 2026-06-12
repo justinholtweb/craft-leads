@@ -8,9 +8,11 @@ use craft\base\Plugin as BasePlugin;
 use craft\events\RegisterComponentTypesEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
+use craft\events\TemplateEvent;
 use craft\services\Elements;
 use craft\services\UserPermissions;
 use craft\web\UrlManager;
+use craft\web\View;
 use craft\web\twig\variables\CraftVariable;
 use justinholtweb\leads\elements\Popup;
 use justinholtweb\leads\models\Settings;
@@ -64,6 +66,7 @@ class Plugin extends BasePlugin
             $this->registerPermissions();
             $this->registerTwigExtensions();
             $this->registerVariables();
+            $this->registerAutoInject();
         });
     }
 
@@ -185,6 +188,47 @@ class Plugin extends BasePlugin
                 /** @var CraftVariable $variable */
                 $variable = $event->sender;
                 $variable->set('leads', LeadsVariable::class);
+            }
+        );
+    }
+
+    private function registerAutoInject(): void
+    {
+        Event::on(
+            View::class,
+            View::EVENT_AFTER_RENDER_PAGE_TEMPLATE,
+            function (TemplateEvent $event) {
+                $request = Craft::$app->getRequest();
+
+                // Front-end site requests only — never the CP or console.
+                if ($request->getIsConsoleRequest() || !$request->getIsSiteRequest()) {
+                    return;
+                }
+
+                if ($event->templateMode !== View::TEMPLATE_MODE_SITE) {
+                    return;
+                }
+
+                if (!$this->getSettings()->autoInjectScript) {
+                    return;
+                }
+
+                $popups = $this->popups->getActivePopupsForPage($request->getUrl());
+                if (empty($popups)) {
+                    return;
+                }
+
+                $html = $this->renderer->getInjectHtml($popups);
+                if ($html === '') {
+                    return;
+                }
+
+                // Inject right before </body> when present, otherwise append.
+                if (preg_match('/<\/body>/i', $event->output)) {
+                    $event->output = preg_replace('/<\/body>/i', $html . '$0', $event->output, 1);
+                } else {
+                    $event->output .= $html;
+                }
             }
         );
     }

@@ -2,34 +2,72 @@
     "name": "justinholtweb/craft-leads",
     "description": "Popup and lead generation plugin for Craft CMS 5. Create modals, slide-ins, notification bars, and inline forms with targeting rules, email integrations, and analytics.",
     "type": "craft-plugin",
+    "version": "5.0.0",
+    "keywords": [
+        "craft",
+        "cms",
+        "craftcms",
+        "craft-plugin",
+        "popup",
+        "modal",
+        "lead-generation",
+        "newsletter",
+        "optin",
+        "conversion"
+    ],
     "license": "proprietary",
-    "minimum-stability": "dev",
-    "prefer-stable": true,
+    "authors": [
+        {
+            "name": "Justin Holt",
+            "homepage": "https://justinholt.com"
+        }
+    ],
+    "support": {
+        "docs": "https://github.com/justinholtweb/craft-leads/blob/main/README.md",
+        "issues": "https://github.com/justinholtweb/craft-leads/issues",
+        "source": "https://github.com/justinholtweb/craft-leads"
+    },
     "require": {
         "php": "^8.2",
         "craftcms/cms": "^5.3.0"
     },
     "require-dev": {
-        "codeception/codeception": "^5.0",
         "craftcms/ecs": "dev-main",
-        "craftcms/phpstan": "dev-main"
+        "craftcms/phpstan": "dev-main",
+        "phpunit/phpunit": "^10.5"
     },
     "autoload": {
         "psr-4": {
             "justinholtweb\\leads\\": "src/"
         }
     },
-    "support": {
-        "issues": "https://github.com/justinholtweb/craft-leads/issues",
-        "source": "https://github.com/justinholtweb/craft-leads"
+    "autoload-dev": {
+        "psr-4": {
+            "justinholtweb\\leads\\tests\\": "tests/"
+        }
     },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "allow-plugins": {
+            "yiisoft/yii2-composer": true,
+            "craftcms/plugin-installer": true,
+            "craftcms/generator": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
     "extra": {
         "handle": "leads",
         "name": "Leads",
         "developer": "Justin Holt",
-        "developerUrl": "https://github.com/justinholtweb",
-        "documentationUrl": "https://github.com/justinholtweb/craft-leads",
+        "developerUrl": "https://justinholt.com",
+        "documentationUrl": "https://github.com/justinholtweb/craft-leads/blob/main/README.md",
+        "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-leads/main/CHANGELOG.md",
         "description": "Popup and lead generation plugin for Craft CMS.",
+        "hasCpSettings": true,
+        "hasCpSection": true,
         "class": "justinholtweb\\leads\\Plugin"
     }
 }

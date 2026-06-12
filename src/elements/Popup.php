@@ -235,29 +235,30 @@ class Popup extends Element
 
     public function getFormFieldsArray(): array
     {
-        if (is_string($this->formFields)) {
-            return Json::decodeIfJson($this->formFields) ?: [];
-        }
-
-        return $this->formFields ?? [];
+        return $this->normalizeJsonValue($this->formFields);
     }
 
     public function getTargetingRulesArray(): array
     {
-        if (is_string($this->targetingRules)) {
-            return Json::decodeIfJson($this->targetingRules) ?: [];
-        }
-
-        return $this->targetingRules ?? [];
+        return $this->normalizeJsonValue($this->targetingRules);
     }
 
     public function getIntegrationSettingsArray(): array
     {
-        if (is_string($this->integrationSettings)) {
-            return Json::decodeIfJson($this->integrationSettings) ?: [];
+        return $this->normalizeJsonValue($this->integrationSettings);
+    }
+
+    /**
+     * Coerce a JSON column value (which may arrive as an array, a JSON string,
+     * or null depending on how the element was hydrated) into an array.
+     */
+    private function normalizeJsonValue(array|string|null $value): array
+    {
+        if (is_string($value)) {
+            $value = Json::decodeIfJson($value);
         }
 
-        return $this->integrationSettings ?? [];
+        return is_array($value) ? $value : [];
     }
 
     public function afterSave(bool $isNew): void
@@ -283,10 +284,12 @@ class Popup extends Element
         $record->backgroundColor = $this->backgroundColor;
         $record->backgroundImage = $this->backgroundImage;
         $record->customCss = $this->customCss;
-        $record->formFields = is_array($this->formFields) ? Json::encode($this->formFields) : $this->formFields;
-        $record->targetingRules = is_array($this->targetingRules) ? Json::encode($this->targetingRules) : $this->targetingRules;
+        // These are json() columns — assign normalized arrays and let Craft's
+        // JSON column binding encode them once. Encoding here too would double-encode.
+        $record->formFields = $this->getFormFieldsArray() ?: null;
+        $record->targetingRules = $this->getTargetingRulesArray() ?: null;
         $record->integrationProvider = $this->integrationProvider;
-        $record->integrationSettings = is_array($this->integrationSettings) ? Json::encode($this->integrationSettings) : $this->integrationSettings;
+        $record->integrationSettings = $this->getIntegrationSettingsArray() ?: null;
         $record->position = $this->position;
         $record->popupStatus = $this->popupStatus;
         $record->priority = $this->priority;
