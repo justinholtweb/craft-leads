@@ -44,6 +44,10 @@ class PopupsController extends Controller
                 }
             } else {
                 $popup = new Popup();
+                // Seed a new popup with the configured default colors.
+                $settings = Plugin::getInstance()->getSettings();
+                $popup->buttonColor = $settings->defaultButtonColor;
+                $popup->backgroundColor = $settings->defaultBackgroundColor;
             }
         }
 

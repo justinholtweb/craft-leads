@@ -10,6 +10,7 @@ use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
 use craft\events\TemplateEvent;
 use craft\services\Elements;
+use craft\services\Gc;
 use craft\services\UserPermissions;
 use craft\web\UrlManager;
 use craft\web\View;
@@ -67,6 +68,7 @@ class Plugin extends BasePlugin
             $this->registerTwigExtensions();
             $this->registerVariables();
             $this->registerAutoInject();
+            $this->registerGarbageCollection();
         });
     }
 
@@ -229,6 +231,28 @@ class Plugin extends BasePlugin
                 } else {
                     $event->output .= $html;
                 }
+            }
+        );
+    }
+
+    private function registerGarbageCollection(): void
+    {
+        // Prune submissions older than the configured retention window when
+        // Craft runs garbage collection.
+        Event::on(
+            Gc::class,
+            Gc::EVENT_RUN,
+            function () {
+                $days = $this->getSettings()->dataRetentionDays;
+                if ($days <= 0) {
+                    return;
+                }
+
+                $cutoff = (new \DateTime("-{$days} days"))->format('Y-m-d H:i:s');
+
+                Craft::$app->getDb()->createCommand()
+                    ->delete('{{%leads_submissions}}', ['<', 'dateCreated', $cutoff])
+                    ->execute();
             }
         );
     }
