@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.0.1 - 2026-07-19
+
+### Fixed
+- Custom popup index columns (status badge, type and trigger labels) now render on the element index — updated the element to Craft 5's `attributeHtml()` hook (the old `tableAttributeHtml()` was silently ignored and could fatal on its fallback).
+- Submission custom fields are no longer double-encoded when saved — the value is stored as JSON once instead of a JSON-encoded string.
+
+### Added
+- PHPStan (level 5) and ECS configuration, plus `composer phpstan`, `composer ecs`, and `composer check` scripts.
+- Regression tests pinning the Craft 5 element index-column contract.
+
 ## 5.0.0 - 2026-06-12
 
 ### Added

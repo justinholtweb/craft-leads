@@ -13,6 +13,7 @@
     </testsuites>
     <source>
         <include>
+            <directory>src/elements</directory>
             <directory>src/enums</directory>
             <directory>src/integrations</directory>
         </include>

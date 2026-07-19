@@ -12,9 +12,9 @@ use craft\events\TemplateEvent;
 use craft\services\Elements;
 use craft\services\Gc;
 use craft\services\UserPermissions;
+use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
-use craft\web\twig\variables\CraftVariable;
 use justinholtweb\leads\elements\Popup;
 use justinholtweb\leads\models\Settings;
 use justinholtweb\leads\services\Analytics;
@@ -60,7 +60,7 @@ class Plugin extends BasePlugin
     {
         parent::init();
 
-        Craft::$app->onInit(function () {
+        Craft::$app->onInit(function() {
             $this->registerElementTypes();
             $this->registerCpRoutes();
             $this->registerSiteRoutes();
@@ -132,7 +132,7 @@ class Plugin extends BasePlugin
         Event::on(
             Elements::class,
             Elements::EVENT_REGISTER_ELEMENT_TYPES,
-            function (RegisterComponentTypesEvent $event) {
+            function(RegisterComponentTypesEvent $event) {
                 $event->types[] = Popup::class;
             }
         );
@@ -143,7 +143,7 @@ class Plugin extends BasePlugin
         Event::on(
             UrlManager::class,
             UrlManager::EVENT_REGISTER_CP_URL_RULES,
-            function (RegisterUrlRulesEvent $event) {
+            function(RegisterUrlRulesEvent $event) {
                 // Dashboard
                 $event->rules['leads/dashboard'] = 'leads/dashboard/index';
 
@@ -166,7 +166,7 @@ class Plugin extends BasePlugin
         Event::on(
             UrlManager::class,
             UrlManager::EVENT_REGISTER_SITE_URL_RULES,
-            function (RegisterUrlRulesEvent $event) {
+            function(RegisterUrlRulesEvent $event) {
                 // Form submission
                 $event->rules['leads/submit'] = 'leads/submit/index';
 
@@ -186,7 +186,7 @@ class Plugin extends BasePlugin
         Event::on(
             CraftVariable::class,
             CraftVariable::EVENT_INIT,
-            function (Event $event) {
+            function(Event $event) {
                 /** @var CraftVariable $variable */
                 $variable = $event->sender;
                 $variable->set('leads', LeadsVariable::class);
@@ -199,7 +199,7 @@ class Plugin extends BasePlugin
         Event::on(
             View::class,
             View::EVENT_AFTER_RENDER_PAGE_TEMPLATE,
-            function (TemplateEvent $event) {
+            function(TemplateEvent $event) {
                 $request = Craft::$app->getRequest();
 
                 // Front-end site requests only — never the CP or console.
@@ -242,7 +242,7 @@ class Plugin extends BasePlugin
         Event::on(
             Gc::class,
             Gc::EVENT_RUN,
-            function () {
+            function() {
                 $days = $this->getSettings()->dataRetentionDays;
                 if ($days <= 0) {
                     return;
@@ -262,7 +262,7 @@ class Plugin extends BasePlugin
         Event::on(
             UserPermissions::class,
             UserPermissions::EVENT_REGISTER_PERMISSIONS,
-            function (RegisterUserPermissionsEvent $event) {
+            function(RegisterUserPermissionsEvent $event) {
                 $event->permissions[] = [
                     'heading' => Craft::t('leads', 'Leads'),
                     'permissions' => [

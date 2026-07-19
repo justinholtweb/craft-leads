@@ -4,7 +4,13 @@ namespace justinholtweb\leads\elements\db;
 
 use craft\elements\db\ElementQuery;
 use craft\helpers\Db;
+use justinholtweb\leads\elements\Popup;
 
+/**
+ * @method Popup[] all($db = null)
+ * @method Popup|null one($db = null)
+ * @method Popup|null nth(int $n, $db = null)
+ */
 class PopupQuery extends ElementQuery
 {
     public ?string $popupType = null;

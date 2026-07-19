@@ -5,7 +5,6 @@ namespace justinholtweb\leads\services;
 use Craft;
 use craft\base\Component;
 use craft\db\Query;
-use craft\helpers\Json;
 use justinholtweb\leads\Plugin;
 use justinholtweb\leads\records\SubmissionRecord;
 
@@ -17,7 +16,9 @@ class Submissions extends Component
         $record->popupId = $popupId;
         $record->email = $email;
         $record->name = $name;
-        $record->customFields = !empty($customFields) ? Json::encode($customFields) : null;
+        // Assign the raw array — the json() column encodes it once. Pre-encoding
+        // here would double-encode (Craft binds arrays to json columns itself).
+        $record->customFields = !empty($customFields) ? $customFields : null;
         $record->ipAddress = Craft::$app->getRequest()->getUserIP();
         $record->userAgent = Craft::$app->getRequest()->getUserAgent();
         $record->pageUrl = $pageUrl ?? Craft::$app->getRequest()->getReferrer() ?? '';

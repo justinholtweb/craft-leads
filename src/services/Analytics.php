@@ -5,7 +5,6 @@ namespace justinholtweb\leads\services;
 use Craft;
 use craft\base\Component;
 use craft\db\Query;
-use justinholtweb\leads\records\StatsRecord;
 
 class Analytics extends Component
 {

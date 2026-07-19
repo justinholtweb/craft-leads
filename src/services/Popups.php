@@ -66,7 +66,7 @@ class Popups extends Component
             ->orderBy('priority ASC')
             ->all();
 
-        return array_filter($popups, function (Popup $popup) use ($url) {
+        return array_filter($popups, function(Popup $popup) use ($url) {
             return $this->matchesTargetingRules($popup, $url);
         });
     }

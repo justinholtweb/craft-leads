@@ -3,7 +3,6 @@
 namespace justinholtweb\leads\queue\jobs;
 
 use Craft;
-use craft\helpers\Json;
 use craft\queue\BaseJob;
 use justinholtweb\leads\Plugin;
 use justinholtweb\leads\records\SubmissionRecord;
@@ -41,15 +40,14 @@ class SyncSubmissionJob extends BaseJob
             return;
         }
 
+        // The json() column decodes to an array; coerce anything unexpected to [].
         $customFields = $record->customFields;
-        if (is_string($customFields)) {
-            $customFields = Json::decodeIfJson($customFields) ?: [];
-        }
+        $customFields = is_array($customFields) ? $customFields : [];
 
         $success = $integration->sendSubscriber(
             $record->email,
             $record->name,
-            $customFields ?? []
+            $customFields
         );
 
         $record->syncStatus = $success ? 'synced' : 'failed';

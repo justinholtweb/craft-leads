@@ -194,13 +194,13 @@ class Popup extends Element
         return UrlHelper::cpUrl("leads/popups/{$this->id}");
     }
 
-    protected function tableAttributeHtml(string $attribute): string
+    protected function attributeHtml(string $attribute): string
     {
         return match ($attribute) {
             'popupStatus' => '<span class="status ' . PopupStatus::from($this->popupStatus)->color() . '"></span>' . PopupStatus::from($this->popupStatus)->label(),
             'popupType' => PopupType::from($this->popupType)->label(),
             'triggerType' => ucfirst($this->triggerType),
-            default => parent::tableAttributeHtml($attribute),
+            default => parent::attributeHtml($attribute),
         };
     }
 

@@ -28,7 +28,7 @@ class TrackingController extends Controller
         $popupId = (int)$request->getRequiredBodyParam('popupId');
         $type = $request->getRequiredBodyParam('type');
 
-        if (!in_array($type, ['impression', 'conversion', 'close'])) {
+        if (!in_array($type, ['impression', 'conversion', 'close'], true)) {
             return $this->asJson(['success' => false]);
         }
 
