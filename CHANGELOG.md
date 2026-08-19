@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.0.2 - 2026-08-19
+
+### Fixed
+- Settings → Plugins → Leads now redirects to the plugin's own settings screen instead of embedding it. The embedded copy nested a full control panel page (with its own `fullPageForm` and action input) inside Craft's settings form, producing a form-in-a-form with two `action` inputs that could post to the wrong handler.
+- The settings template now imports Craft's `forms` macros, which it relies on for every field it renders.
+
 ## 5.0.1 - 2026-07-19
 
 ### Fixed
