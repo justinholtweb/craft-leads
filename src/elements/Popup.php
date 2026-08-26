@@ -8,6 +8,7 @@ use craft\elements\actions\Delete;
 use craft\elements\actions\Restore;
 use craft\helpers\Json;
 use craft\helpers\UrlHelper;
+use craft\enums\Color;
 use justinholtweb\leads\elements\db\PopupQuery;
 use justinholtweb\leads\enums\PopupStatus;
 use justinholtweb\leads\enums\PopupType;
@@ -78,10 +79,10 @@ class Popup extends Element
     public static function statuses(): array
     {
         return [
-            'draft' => ['label' => Craft::t('leads', 'Draft'), 'color' => 'white'],
-            'active' => ['label' => Craft::t('leads', 'Active'), 'color' => 'green'],
-            'paused' => ['label' => Craft::t('leads', 'Paused'), 'color' => 'orange'],
-            'archived' => ['label' => Craft::t('leads', 'Archived'), 'color' => 'red'],
+            'draft' => ['label' => Craft::t('leads', 'Draft'), 'color' => Color::White],
+            'active' => ['label' => Craft::t('leads', 'Active'), 'color' => Color::Green],
+            'paused' => ['label' => Craft::t('leads', 'Paused'), 'color' => Color::Orange],
+            'archived' => ['label' => Craft::t('leads', 'Archived'), 'color' => Color::Red],
         ];
     }
 

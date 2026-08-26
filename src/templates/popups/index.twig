@@ -1,19 +1,8 @@
-{% extends 'leads/_layouts/plugin' %}
+{% extends '_layouts/elementindex' %}
 
 {% set title = 'Popups'|t('leads') %}
 {% set selectedSubnavItem = 'popups' %}
-{% set elementType = elementType %}
-
-{% block pluginContent %}
-    {{ craft.app.view.renderTemplate('_elements/indexcontainer', {
-        elementType: elementType,
-        sources: null,
-        context: 'index',
-        showStatusMenu: true,
-        showSiteMenu: false,
-        toolbarFlexible: true,
-    }) }}
-{% endblock %}
+{% set showSiteMenu = false %}
 
 {% block actionButton %}
     <a href="{{ url('leads/popups/new') }}" class="btn submit">{{ 'New Popup'|t('leads') }}</a>

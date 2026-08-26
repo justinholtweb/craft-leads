@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.0.3 - 2026-08-26
+
+### Fixed
+
+- **The Popups screen was unusable.** It rendered `_elements/indexcontainer` by hand and got three things wrong at once: no `|raw`, so the entire element-index markup was printed on the page as escaped HTML; `sources: null`, which makes Craft's index controller return no rows by design; and no source list, so Modals, Slide-ins, Drafts and the rest were unreachable. It now extends `_layouts/elementindex` like every other screen.
+- **The popups index returned HTTP 500 whenever the status column was shown.** Craft 5 expects `statuses()` to return `craft\enums\Color` cases rather than colour strings.
+
 ## 5.0.2 - 2026-08-19
 
 ### Fixed
