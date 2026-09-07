@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.0.4 - 2026-09-07
+
+### Fixed
+
+- **The popup editor was unusable.** Control panel → Leads → Popups → New (and the edit screen for any existing popup) died with `Twig\Error\RuntimeError: Variable "forms" does not exist` before any field rendered. `popups/edit.twig` used `forms.textField()` etc. without importing Craft's form macros — the 5.0.2 fix for this same bug in the settings template never made it to the popup editor. ([#1](https://github.com/justinholtweb/craft-leads/issues/1))
+
 ## 5.0.3 - 2026-08-26
 
 ### Fixed
