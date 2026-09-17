@@ -80,24 +80,23 @@ class Plugin extends BasePlugin
 
         $nav['subnav'] = [];
 
-        if (Craft::$app->getUser()->checkPermission('leads:viewDashboard') ||
-            Craft::$app->getUser()->checkPermission('leads:accessPlugin')) {
+        // Each gate below mirrors the `requirePermission()` call in the matching controller's
+        // index action, so the subnav never offers a page that answers 403.
+        if (Craft::$app->getUser()->checkPermission('leads:viewDashboard')) {
             $nav['subnav']['dashboard'] = [
                 'label' => Craft::t('leads', 'Dashboard'),
                 'url' => 'leads/dashboard',
             ];
         }
 
-        if (Craft::$app->getUser()->checkPermission('leads:managePopups') ||
-            Craft::$app->getUser()->checkPermission('leads:accessPlugin')) {
+        if (Craft::$app->getUser()->checkPermission('leads:accessPlugin')) {
             $nav['subnav']['popups'] = [
                 'label' => Craft::t('leads', 'Popups'),
                 'url' => 'leads/popups',
             ];
         }
 
-        if (Craft::$app->getUser()->checkPermission('leads:viewSubmissions') ||
-            Craft::$app->getUser()->checkPermission('leads:accessPlugin')) {
+        if (Craft::$app->getUser()->checkPermission('leads:viewSubmissions')) {
             $nav['subnav']['submissions'] = [
                 'label' => Craft::t('leads', 'Submissions'),
                 'url' => 'leads/submissions',
@@ -111,6 +110,16 @@ class Plugin extends BasePlugin
                 'url' => 'leads/settings',
             ];
         }
+
+        // `parent::getCpNavItem()` points the top-level item at the bare `leads` path, which
+        // lands on the dashboard — a page not every user is allowed to see. Point it at the first
+        // subnav entry this user can actually reach instead, which also keeps the highlighted nav
+        // state correct.
+        if ($nav['subnav'] === []) {
+            return null;
+        }
+
+        $nav['url'] = reset($nav['subnav'])['url'];
 
         return $nav;
     }
@@ -158,7 +167,8 @@ class Plugin extends BasePlugin
             UrlManager::class,
             UrlManager::EVENT_REGISTER_CP_URL_RULES,
             function(RegisterUrlRulesEvent $event) {
-                // Dashboard
+                // Dashboard — `leads` is also routed here so bookmarks and typed URLs resolve.
+                $event->rules['leads'] = 'leads/dashboard/index';
                 $event->rules['leads/dashboard'] = 'leads/dashboard/index';
 
                 // Popups

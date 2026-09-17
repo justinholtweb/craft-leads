@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.0.5 - 2026-09-17
+
+### Fixed
+
+- **Clicking Leads in the control panel sidebar 404'd.** `getCpNavItem()` inherited its top-level URL from `BasePlugin`, which points at the bare plugin handle — and `leads` had no CP route of its own, only its four children. The nav item now points at the first subnav entry the signed-in user can actually reach, and `leads` is routed to the dashboard so bookmarks and typed URLs resolve too. ([#2](https://github.com/justinholtweb/craft-leads/issues/2))
+- The Dashboard and Submissions subnav entries were shown to anyone holding `leads:accessPlugin`, but their controllers require `leads:viewDashboard` and `leads:viewSubmissions` — so those users were offered links that answered 403. Each subnav gate now mirrors the permission its controller enforces, and the nav item is hidden entirely when none of them are reachable.
+
 ## 5.0.4 - 2026-09-07
 
 ### Fixed
