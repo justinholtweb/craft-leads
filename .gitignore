@@ -9,3 +9,4 @@
 
 # Local DDEV (untracked)
 /.ddev/
+/composer.lock

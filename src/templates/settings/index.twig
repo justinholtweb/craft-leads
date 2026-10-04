@@ -3,9 +3,19 @@
 
 {% set title = 'Leads Settings'|t('leads') %}
 {% set selectedSubnavItem = 'settings' %}
-{% set fullPageForm = true %}
+{% set fullPageForm = not readOnly %}
 
 {% block pluginContent %}
+    {% if readOnly %}
+        <p class="notice has-icon">
+            <span class="icon" aria-hidden="true"></span>
+            <span class="visually-hidden">{{ 'Note:'|t('app') }} </span>
+            <span>{{ (currentUser.admin
+                ? 'Admin changes are turned off on this environment. Change settings where they are allowed and deploy the project config.'
+                : 'Settings are project config, so only an admin can change them.')|t('leads') }}</span>
+        </p>
+        <fieldset disabled class="leads-readonly">
+    {% endif %}
     <input type="hidden" name="action" value="leads/settings/save">
     {{ redirectInput('leads/settings') }}
 
@@ -66,6 +76,17 @@
             max: 60,
         }) }}
 
+        {{ forms.textField({
+            label: 'Tracking Events Per Minute'|t('leads'),
+            instructions: 'Most impressions, conversions and closes one address can record in a minute. Behind a proxy or CDN, set Craft’s `trustedHosts`, or every visitor shares the proxy’s limit.'|t('leads'),
+            id: 'trackingPerMinute',
+            name: 'settings[trackingPerMinute]',
+            value: settings.trackingPerMinute,
+            type: 'number',
+            min: 1,
+            max: 600,
+        }) }}
+
         <hr>
 
         <h2>{{ 'Data'|t('leads') }}</h2>
@@ -80,4 +101,7 @@
             min: 0,
         }) }}
     </div>
+    {% if readOnly %}
+        </fieldset>
+    {% endif %}
 {% endblock %}

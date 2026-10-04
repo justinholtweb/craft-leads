@@ -140,7 +140,14 @@ class PopupsController extends Controller
         $popup->formFields = $request->getBodyParam('formFields');
         $popup->targetingRules = $request->getBodyParam('targetingRules');
         $popup->integrationProvider = $request->getBodyParam('integrationProvider') ?: null;
-        $popup->integrationSettings = $request->getBodyParam('integrationSettings');
+        // Only the settings the chosen provider takes; the form carries every provider's fields.
+        $integrationSettings = (array)$request->getBodyParam('integrationSettings', []);
+        $popup->integrationSettings = $popup->integrationProvider
+            ? array_map(static fn($value) => is_string($value) ? trim($value) : $value, array_intersect_key(
+                $integrationSettings,
+                array_flip(\justinholtweb\leads\services\Integrations::FIELDS[$popup->integrationProvider] ?? []),
+            ))
+            : null;
         $popup->position = $request->getBodyParam('position') ?: null;
         $popup->popupStatus = $request->getBodyParam('popupStatus', 'draft');
         $popup->priority = (int)$request->getBodyParam('priority', 0);
@@ -165,11 +172,18 @@ class PopupsController extends Controller
         $duplicate = Plugin::getInstance()->popups->duplicate($popupId);
 
         if (!$duplicate) {
+            if ($this->request->getAcceptsJson()) {
+                return $this->asFailure(Craft::t('leads', 'Couldn\'t duplicate popup.'));
+            }
             Craft::$app->getSession()->setError(Craft::t('leads', 'Couldn\'t duplicate popup.'));
             return $this->redirect("leads/popups/{$popupId}");
         }
 
         Craft::$app->getSession()->setNotice(Craft::t('leads', 'Popup duplicated.'));
+
+        if ($this->request->getAcceptsJson()) {
+            return $this->asSuccess(Craft::t('leads', 'Popup duplicated.'), ['id' => $duplicate->id]);
+        }
 
         return $this->redirect("leads/popups/{$duplicate->id}");
     }

@@ -34,7 +34,7 @@ class Submissions extends Component
         return true;
     }
 
-    public function getSubmissions(int $popupId = null, int $limit = 50, int $offset = 0): array
+    public function getSubmissions(?int $popupId = null, int $limit = 50, int $offset = 0): array
     {
         $query = (new Query())
             ->from('{{%leads_submissions}}')

@@ -32,7 +32,45 @@ final class IntegrationValidationTest extends TestCase
         $result = (new WebhookIntegration(['webhookUrl' => 'not-a-url']))->testConnection();
 
         $this->assertFalse($result['success']);
-        $this->assertSame('Invalid webhook URL.', $result['message']);
+        $this->assertSame('Only http:// and https:// webhook URLs are allowed.', $result['message']);
+    }
+
+    /**
+     * The webhook integration POSTs anonymous submissions to this URL. Before 5.0.6 any URL was
+     * accepted, so it could reach the cloud metadata service or the private network.
+     */
+    public function testWebhookRefusesPrivateLoopbackAndMetadataAddresses(): void
+    {
+        foreach (['http://127.0.0.1/hook', 'http://169.254.169.254/latest/meta-data/', 'https://10.0.0.5/x', 'http://[::ffff:127.0.0.1]/x', 'https://user:pass@example.com/x', 'ftp://example.com/x'] as $url) {
+            $result = (new WebhookIntegration(['webhookUrl' => $url]))->testConnection();
+            $this->assertFalse($result['success'], $url);
+        }
+
+        // …unless the site has said private hosts are fine.
+        $this->assertTrue((new WebhookIntegration(['webhookUrl' => 'http://10.0.0.5/x'], true))->testConnection()['success']);
+    }
+
+    public function testWebhookSendRefusesAPrivateAddressWithoutTryingIt(): void
+    {
+        // Port 9 on loopback answers nothing; refusing up front returns at once.
+        $start = microtime(true);
+        $this->assertFalse((new WebhookIntegration(['webhookUrl' => 'http://127.0.0.1:9/x']))->sendSubscriber('a@example.com'));
+        $this->assertLessThan(1.0, microtime(true) - $start);
+    }
+
+    /**
+     * The data centre in a Mailchimp key becomes part of the API host name. Before 5.0.6 a key
+     * ending `-evil.example/#` sent the key to another server.
+     */
+    public function testMailchimpDataCentreMustLookLikeOne(): void
+    {
+        $this->assertSame('us12', MailchimpIntegration::dataCenter('0123abcd-us12'));
+        foreach (['0123abcd-evil.example/#', '0123abcd-us12.evil.example', '0123abcd', '0123abcd-', 'x-us1:8080'] as $key) {
+            $this->assertNull(MailchimpIntegration::dataCenter($key), $key);
+        }
+
+        $result = (new MailchimpIntegration(['apiKey' => 'abc-evil.example/#']))->testConnection();
+        $this->assertFalse($result['success']);
     }
 
     public function testWebhookTestConnectionAcceptsValidUrl(): void

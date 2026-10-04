@@ -91,7 +91,7 @@ class Popup extends Element
         return new PopupQuery(static::class);
     }
 
-    public static function defineSources(string $context = null): array
+    public static function defineSources(?string $context = null): array
     {
         return [
             [
@@ -177,7 +177,7 @@ class Popup extends Element
         ];
     }
 
-    protected static function defineActions(string $source = null): array
+    protected static function defineActions(?string $source = null): array
     {
         return [
             Delete::class,
@@ -230,8 +230,25 @@ class Popup extends Element
         $rules[] = [['heading', 'buttonText', 'triggerValue'], 'string', 'max' => 255];
         $rules[] = [['buttonColor', 'backgroundColor'], 'string', 'max' => 20];
         $rules[] = [['priority'], 'integer'];
+        $rules[] = [['integrationSettings'], 'validateIntegrationSettings', 'skipOnEmpty' => false];
 
         return $rules;
+    }
+
+    /**
+     * Refuses integration settings Leads couldn't use, on save — a webhook URL it won't send to,
+     * an `$ENV_VAR` that isn't set, a Mailchimp key with no data centre — rather than letting the
+     * first submission find out.
+     */
+    public function validateIntegrationSettings(string $attribute): void
+    {
+        if (!$this->integrationProvider) {
+            return;
+        }
+
+        foreach (\justinholtweb\leads\Plugin::getInstance()->integrations->problems($this->integrationProvider, $this->getIntegrationSettingsArray()) as $problem) {
+            $this->addError($attribute, $problem);
+        }
     }
 
     public function getFormFieldsArray(): array

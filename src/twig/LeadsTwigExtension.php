@@ -3,8 +3,8 @@
 namespace justinholtweb\leads\twig;
 
 use Craft;
-use craft\helpers\Json;
 use justinholtweb\leads\Plugin;
+use justinholtweb\leads\services\Renderer;
 use justinholtweb\leads\web\assets\frontend\FrontendAsset;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
@@ -49,12 +49,12 @@ class LeadsTwigExtension extends AbstractExtension
         $view = Craft::$app->getView();
         $view->registerAssetBundle(FrontendAsset::class);
 
-        $configJson = Json::encode($configs);
+        $configJson = Renderer::scriptJson($configs);
 
         return '<script>window._leadsConfig = ' . $configJson . ';</script>';
     }
 
-    public function leadsInline(string $handle = null): string
+    public function leadsInline(?string $handle = null): string
     {
         if (Craft::$app->getRequest()->getIsCpRequest()) {
             return '';
@@ -80,9 +80,9 @@ class LeadsTwigExtension extends AbstractExtension
         $renderer = Plugin::getInstance()->renderer;
         $config = $renderer->getPopupConfig($popup);
 
-        $configJson = Json::encode([$config]);
+        $configJson = Renderer::scriptJson([$config]);
 
         return $renderer->renderPopup($popup)
-            . '<script>window._leadsConfig = window._leadsConfig || []; window._leadsConfig.push(' . Json::encode($config) . ');</script>';
+            . '<script>window._leadsConfig = window._leadsConfig || []; window._leadsConfig.push(' . Renderer::scriptJson($config) . ');</script>';
     }
 }

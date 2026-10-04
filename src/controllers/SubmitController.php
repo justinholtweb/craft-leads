@@ -4,6 +4,7 @@ namespace justinholtweb\leads\controllers;
 
 use Craft;
 use craft\web\Controller;
+use justinholtweb\leads\helpers\RateLimit;
 use justinholtweb\leads\Plugin;
 use yii\web\Response;
 use yii\web\TooManyRequestsHttpException;
@@ -41,8 +42,9 @@ class SubmitController extends Controller
             }
         }
 
-        // Per-IP rate limit (sliding 60s window).
-        if (!$this->_checkRateLimit($settings->rateLimitPerMinute)) {
+        // Per-address limit, under a site-wide ceiling. Before 5.0.6 this keyed on getUserIP(), which
+        // a forged X-Forwarded-For resets, and its read-then-write let parallel requests through.
+        if (!RateLimit::allow('submit', $settings->rateLimitPerMinute)) {
             throw new TooManyRequestsHttpException('Too many submissions. Please try again later.');
         }
 
@@ -66,28 +68,5 @@ class SubmitController extends Controller
         );
 
         return $this->asJson(['success' => $success]);
-    }
-
-    private function _checkRateLimit(int $maxPerMinute): bool
-    {
-        if ($maxPerMinute <= 0) {
-            return true;
-        }
-
-        $ip = Craft::$app->getRequest()->getUserIP();
-        if (!$ip) {
-            return true;
-        }
-
-        $cache = Craft::$app->getCache();
-        $key = "leads:submit:{$ip}";
-
-        $count = (int)$cache->get($key);
-        if ($count >= $maxPerMinute) {
-            return false;
-        }
-
-        $cache->set($key, $count + 1, 60);
-        return true;
     }
 }

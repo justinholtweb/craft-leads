@@ -1,5 +1,31 @@
 # Changelog
 
+## 5.0.6 - 2026-10-04
+
+> {warning} Leads settings can now only be changed by an admin, on an environment where `allowAdminChanges` is on — "Manage settings" alone shows them read-only. Webhook integrations now refuse private, loopback and link-local addresses; set `allowPrivateWebhookHosts` in `config/leads.php` if yours posts to an internal host. If the site is behind a proxy or CDN, set Craft's `trustedHosts` so the rate limits see visitors' addresses rather than the proxy's.
+
+### Security
+
+- **A webhook could point anywhere.** Each anonymous submission was POSTed to the popup's webhook URL with no check, so anyone who could manage popups could aim the server at the cloud metadata service or the private network — or, through cURL, at another scheme entirely. A webhook must now be `http`/`https`, carry no credentials and resolve only to public addresses; the request is pinned to the addresses that were checked and doesn't follow redirects. A popup with a refused URL won't save, and one already stored is refused at send time.
+- **"Manage settings" could change project-config settings on the live site**, where the next deploy silently undid them. Saving now needs an admin where admin changes are allowed, as Craft's own settings do; everyone else sees the screen read-only. The save also only takes the fields the form has, merged over the current settings.
+- **The CSV export handed spreadsheets formulas.** Names and page URLs come from anonymous visitors, and a cell starting `=`, `+`, `-`, `@`, a tab or a carriage return runs as a formula when staff open the file (`=HYPERLINK(…)`). Such cells are now prefixed with `'`.
+- **The submission rate limit could be reset by any client** — it keyed on `getUserIP()`, which reads `X-Forwarded-For` unasked, and its read-then-write let parallel requests through. It now keys on the connecting address (the forwarded one only when `trustedHosts` names your proxies), counts under a lock, and sits under a site-wide ceiling.
+- **The tracking endpoint counted anything.** Impressions, conversions and closes were recorded for any popup ID, live or not, as fast as they were sent — the dashboard and the A/B numbers were whatever anyone posted. Events now count only for active popups, within the new `trackingPerMinute` budget (60 per address, under a site-wide ceiling); over it, the endpoint answers 429.
+- **A `</script>` in a popup's custom CSS or text closed the injected config script.** The JSON written into the page is now hex-escaped.
+- A Mailchimp API key whose data-centre suffix isn't one (`-us6`) was used to build the request host. It's now checked first, and the list ID is URL-encoded.
+
+### Added
+
+- Integration settings (API keys, list and form IDs, the webhook URL) can be environment variables, so keys stay out of the database; a popup won't save while one it references is unset. The popup editor shows only the chosen provider's fields and stores only those.
+- `trackingPerMinute` and `allowPrivateWebhookHosts` settings.
+
+### Fixed
+
+- **"Save $10" lost its "$10".** Auto-injection spliced the popup in with `preg_replace()`, where `$10` in the popup's text is a back-reference. It's now a plain splice before the last `</body>`.
+- Auto-injection no longer touches action responses or documents served with a sandbox Content Security Policy.
+- The popup editor's Duplicate button was a form nested inside the edit form; it now posts on its own.
+- A webhook answering with a 3xx is no longer counted as delivered.
+
 ## 5.0.5 - 2026-09-17
 
 ### Fixed

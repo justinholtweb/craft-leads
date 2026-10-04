@@ -17,7 +17,22 @@ Popup and lead generation plugin for Craft CMS 5. Creates modals, slide-ins, not
 - Integration abstraction: AbstractIntegration base class with provider implementations
 - Queue-based sync: SyncSubmissionJob pushed after form submission
 - Vanilla JS frontend: no jQuery, reads `window._leadsConfig` JSON
-- Auto-inject option via `EVENT_AFTER_RENDER_PAGE_TEMPLATE` or manual `{{ leadsPopups() }}`
+- Auto-inject option via `EVENT_AFTER_RENDER_PAGE_TEMPLATE` or manual `{{ leadsPopups() }}`. Skips action requests and sandbox-CSP responses; spliced with `strripos`, never `preg_replace` (a `$10` in popup text is a back-reference)
+- JSON written into a `<script>` goes through `Renderer::scriptJson()` (JSON_HEX_*)
+
+## Security rules (5.0.6)
+- Settings are project config: `SettingsController::canSave()` = admin && allowAdminChanges; the save merges only `EDITABLE` over the current settings
+- Public endpoints (`leads/submit`, `leads/tracking/track`) budget through `helpers\RateLimit::allow()` — connecting address (forwarded only with real `trustedHosts`), IPv6 /64, under a lock, 20× global ceiling. Tracking ignores popups that aren't `active`
+- Webhooks: `Integrations::webhookTarget()` (pure, no Craft — unit tests run without it) + `helpers\Ip`; delivery is pinned with `CURLOPT_RESOLVE`, no redirects. `allowPrivateWebhookHosts` is config-only
+- Integration settings may be `$ENV` refs, resolved in `Integrations::getIntegration()`; `Popup::validateIntegrationSettings` reports unset vars and refused targets. The editor stores only `Integrations::FIELDS[provider]`
+- CSV export cells go through `SubmissionsController::csvCell()`
+- Never nest a `<form>` in a CP template — secondary actions use `Craft.sendActionRequest`
+
+## Testing
+```sh
+docker exec -w /sites/craft-leads ddev-phpstan-runner-web bash -c 'vendor/bin/phpunit && vendor/bin/phpstan analyse --memory-limit=1G && vendor/bin/ecs check'
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-leads/tests/integration/security.php   # 27, over HTTP; flips CRAFT_ALLOW_ADMIN_CHANGES briefly, self-cleaning
+```
 
 ## Database Tables
 - `leads_popups` — Element table (PK → elements.id)

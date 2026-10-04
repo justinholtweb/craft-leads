@@ -226,9 +226,20 @@ class Plugin extends BasePlugin
             function(TemplateEvent $event) {
                 $request = Craft::$app->getRequest();
 
-                // Front-end site requests only — never the CP or console.
-                if ($request->getIsConsoleRequest() || !$request->getIsSiteRequest()) {
+                // Front-end site requests only — never the CP or console. Nor action requests, which
+                // answer a controller rather than render a page, nor a document served with a
+                // sandbox CSP (an embed proxied by another plugin, say), which is meant to run cut off
+                // from the site. The same rules PWA follows.
+                if ($request->getIsConsoleRequest() || !$request->getIsSiteRequest() || $request->getIsActionRequest()) {
                     return;
+                }
+
+                foreach ((array)Craft::$app->getResponse()->getHeaders()->get('Content-Security-Policy', [], false) as $policy) {
+                    foreach (explode(';', (string)$policy) as $directive) {
+                        if (preg_match('/^\s*sandbox(\s|$)/i', $directive)) {
+                            return;
+                        }
+                    }
                 }
 
                 if ($event->templateMode !== View::TEMPLATE_MODE_SITE) {
@@ -249,12 +260,13 @@ class Plugin extends BasePlugin
                     return;
                 }
 
-                // Inject right before </body> when present, otherwise append.
-                if (preg_match('/<\/body>/i', $event->output)) {
-                    $event->output = preg_replace('/<\/body>/i', $html . '$0', $event->output, 1);
-                } else {
-                    $event->output .= $html;
-                }
+                // Inject right before the last </body> when there is one, otherwise append. Spliced,
+                // not preg_replace()d: the popup HTML is the replacement, and in a replacement `$10`
+                // is a back-reference — "Save $10" came out as "Save ".
+                $at = strripos($event->output, '</body>');
+                $event->output = $at === false
+                    ? $event->output . $html
+                    : substr($event->output, 0, $at) . $html . substr($event->output, $at);
             }
         );
     }

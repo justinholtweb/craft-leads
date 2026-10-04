@@ -35,6 +35,17 @@ class Renderer extends Component
         }
     }
 
+    /**
+     * Popup config as JSON that is safe inside an inline `<script>`. A popup's custom CSS is
+     * written by whoever manages popups, and plain JSON leaves `</script>` intact — so before 5.0.6
+     * a stylesheet could end the tag and run script on every page that showed the popup. `<`, `>`,
+     * `&` and quotes are hex-escaped; the page script still reads exactly the same values.
+     */
+    public static function scriptJson(mixed $value): string
+    {
+        return (string)json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    }
+
     public function getPopupConfig(Popup $popup): array
     {
         return [
@@ -80,7 +91,7 @@ class Renderer extends Component
 
         $cssUrl = $baseUrl . '/css/leads.css';
         $jsUrl = $baseUrl . '/js/leads.js';
-        $configJson = Json::encode($configs);
+        $configJson = self::scriptJson($configs);
 
         return '<link rel="stylesheet" href="' . $cssUrl . '">'
             . '<script>window._leadsConfig = (window._leadsConfig || []).concat(' . $configJson . ');</script>'

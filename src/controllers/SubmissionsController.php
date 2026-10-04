@@ -56,17 +56,20 @@ class SubmissionsController extends Controller
             $popupId ? (int)$popupId : null
         );
 
-        $csv = "Email,Name,Page URL,Sync Status,Date\n";
+        $handle = fopen('php://temp', 'r+');
+        fputcsv($handle, ['Email', 'Name', 'Page URL', 'Sync Status', 'Date'], ',', '"', '');
         foreach ($submissions as $row) {
-            $csv .= sprintf(
-                "%s,%s,%s,%s,%s\n",
-                $this->escapeCsv($row['email']),
-                $this->escapeCsv($row['name'] ?? ''),
-                $this->escapeCsv($row['pageUrl']),
-                $row['syncStatus'],
-                $row['dateCreated']
-            );
+            fputcsv($handle, array_map([self::class, 'csvCell'], [
+                (string)$row['email'],
+                (string)($row['name'] ?? ''),
+                (string)($row['pageUrl'] ?? ''),
+                (string)$row['syncStatus'],
+                (string)$row['dateCreated'],
+            ]), ',', '"', '');
         }
+        rewind($handle);
+        $csv = (string)stream_get_contents($handle);
+        fclose($handle);
 
         $response = Craft::$app->getResponse();
         $response->content = $csv;
@@ -93,12 +96,14 @@ class SubmissionsController extends Controller
         return $this->redirectToPostedUrl();
     }
 
-    private function escapeCsv(string $value): string
+    /**
+     * A cell a spreadsheet won't run. The name and page URL come from anonymous visitors, and
+     * Excel, Numbers and Sheets treat a cell starting with `=`, `+`, `-`, `@`, a tab or a carriage
+     * return as a formula — `=HYPERLINK(…)` opened by staff. Such cells get a leading apostrophe,
+     * which the spreadsheet shows as text. Before 5.0.6 they were exported as they came.
+     */
+    public static function csvCell(string $value): string
     {
-        if (str_contains($value, ',') || str_contains($value, '"') || str_contains($value, "\n")) {
-            return '"' . str_replace('"', '""', $value) . '"';
-        }
-
-        return $value;
+        return $value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true) ? "'" . $value : $value;
     }
 }

@@ -15,8 +15,13 @@ class MailchimpIntegration extends AbstractIntegration
             return false;
         }
 
-        $dc = $this->getDataCenter($apiKey);
-        $url = "https://{$dc}.api.mailchimp.com/3.0/lists/{$listId}/members";
+        $dc = self::dataCenter($apiKey);
+
+        if ($dc === null) {
+            return false;
+        }
+
+        $url = "https://{$dc}.api.mailchimp.com/3.0/lists/" . rawurlencode((string)$listId) . '/members';
 
         $mergeFields = [];
         if ($name) {
@@ -49,7 +54,12 @@ class MailchimpIntegration extends AbstractIntegration
             return ['success' => false, 'message' => 'API key is required.'];
         }
 
-        $dc = $this->getDataCenter($apiKey);
+        $dc = self::dataCenter($apiKey);
+
+        if ($dc === null) {
+            return ['success' => false, 'message' => 'That doesn’t look like a Mailchimp API key.'];
+        }
+
         $url = "https://{$dc}.api.mailchimp.com/3.0/ping";
 
         $response = $this->request($url, null, $apiKey, 'GET');
@@ -69,7 +79,12 @@ class MailchimpIntegration extends AbstractIntegration
             return [];
         }
 
-        $dc = $this->getDataCenter($apiKey);
+        $dc = self::dataCenter($apiKey);
+
+        if ($dc === null) {
+            return [];
+        }
+
         $url = "https://{$dc}.api.mailchimp.com/3.0/lists?count=100";
 
         $response = $this->request($url, null, $apiKey, 'GET');
@@ -90,10 +105,17 @@ class MailchimpIntegration extends AbstractIntegration
         return $lists;
     }
 
-    private function getDataCenter(string $apiKey): string
+    /**
+     * The data centre a Mailchimp key names (`…-us12` → `us12`), or null when it doesn't look like
+     * one. It becomes part of the API's host name, so before 5.0.6 a key ending `-evil.example/#`
+     * sent the key itself to another server.
+     */
+    public static function dataCenter(string $apiKey): ?string
     {
         $parts = explode('-', $apiKey);
-        return $parts[1] ?? 'us1';
+        $dc = strtolower((string)end($parts));
+
+        return count($parts) >= 2 && preg_match('/^[a-z]+\d+$/', $dc) ? $dc : null;
     }
 
     private function request(string $url, ?array $data, string $apiKey, string $method = 'POST'): ?array

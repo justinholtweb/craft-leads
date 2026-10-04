@@ -3,6 +3,10 @@
 namespace justinholtweb\leads\integrations;
 
 use Craft;
+use GuzzleHttp\Client;
+use GuzzleHttp\Handler\CurlHandler;
+use GuzzleHttp\HandlerStack;
+use justinholtweb\leads\services\Integrations;
 
 class WebhookIntegration extends AbstractIntegration
 {
@@ -21,20 +25,49 @@ class WebhookIntegration extends AbstractIntegration
             'timestamp' => date('c'),
         ];
 
-        $ch = curl_init($webhookUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $target = Integrations::webhookTarget((string)$webhookUrl, $this->allowPrivateHosts);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        if (is_string($target)) {
+            // Guarded: the integrations are also exercised without Craft, in unit tests.
+            if (class_exists(Craft::class)) {
+                Craft::warning("Leads did not send a webhook to {$webhookUrl}: {$target}", 'leads');
+            }
 
-        if ($response === false || $httpCode >= 400) {
+            return false;
+        }
+
+        $options = [
+            'json' => $data,
+            'timeout' => 10,
+            'connect_timeout' => 10,
+            'http_errors' => false,
+            'allow_redirects' => false,
+            'curl' => [CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS],
+        ];
+
+        if ($target['addresses'] !== []) {
+            // One entry per host:port, so every checked address is pinned and DNS can't be swapped
+            // between the check and the connection.
+            $options['curl'][CURLOPT_RESOLVE] = [sprintf(
+                '%s:%d:%s',
+                $target['host'],
+                $target['port'],
+                implode(',', array_map(static fn(string $ip) => str_contains($ip, ':') ? "[$ip]" : $ip, $target['addresses'])),
+            )];
+        }
+
+        try {
+            // A client on the curl handler alone: Guzzle's default stack can hand a request to PHP's
+            // stream wrapper, which ignores every curl option, the address pin included.
+            $response = (new Client(['handler' => HandlerStack::create(new CurlHandler())]))->post((string)$webhookUrl, $options);
+            $httpCode = $response->getStatusCode();
+        } catch (\Throwable $e) {
+            Craft::error("Webhook request failed: {$e->getMessage()}", 'leads');
+
+            return false;
+        }
+
+        if ($httpCode >= 300) {
             Craft::error("Webhook request failed: HTTP {$httpCode}", 'leads');
             return false;
         }
@@ -50,8 +83,10 @@ class WebhookIntegration extends AbstractIntegration
             return ['success' => false, 'message' => 'Webhook URL is required.'];
         }
 
-        if (!filter_var($webhookUrl, FILTER_VALIDATE_URL)) {
-            return ['success' => false, 'message' => 'Invalid webhook URL.'];
+        $target = Integrations::webhookTarget((string)$webhookUrl, $this->allowPrivateHosts);
+
+        if (is_string($target)) {
+            return ['success' => false, 'message' => $target];
         }
 
         return ['success' => true, 'message' => 'Webhook URL is valid.'];

@@ -178,13 +178,71 @@
 
         <h2>{{ 'Integration'|t('leads') }}</h2>
 
+        {% set integration = popup.getIntegrationSettingsArray() %}
+        {% set provider = popup.integrationProvider %}
+
         {{ forms.selectField({
             label: 'Email Integration'|t('leads'),
             id: 'integrationProvider',
             name: 'integrationProvider',
-            value: popup.integrationProvider,
+            value: provider,
             options: integrationOptions,
+            toggle: true,
+            targetPrefix: 'integration-',
+            errors: popup.getErrors('integrationSettings'),
         }) }}
+
+        {% set envHint = 'Name an environment variable such as `$MAILCHIMP_API_KEY` to keep it out of the database.'|t('leads') %}
+
+        <div id="integration-mailchimp"{% if provider != 'mailchimp' %} class="hidden"{% endif %}>
+            {{ forms.autosuggestField({
+                label: 'Mailchimp API Key'|t('leads'),
+                instructions: envHint,
+                id: 'mailchimpApiKey',
+                name: 'integrationSettings[apiKey]',
+                value: provider == 'mailchimp' ? (integration.apiKey ?? '') : '',
+                suggestEnvVars: true,
+                class: 'code',
+            }) }}
+            {{ forms.textField({
+                label: 'Audience ID'|t('leads'),
+                id: 'mailchimpListId',
+                name: 'integrationSettings[listId]',
+                value: provider == 'mailchimp' ? (integration.listId ?? '') : '',
+                class: 'code',
+            }) }}
+        </div>
+
+        <div id="integration-convertkit"{% if provider != 'convertkit' %} class="hidden"{% endif %}>
+            {{ forms.autosuggestField({
+                label: 'ConvertKit API Secret'|t('leads'),
+                instructions: envHint,
+                id: 'convertkitApiSecret',
+                name: 'integrationSettings[apiSecret]',
+                value: provider == 'convertkit' ? (integration.apiSecret ?? '') : '',
+                suggestEnvVars: true,
+                class: 'code',
+            }) }}
+            {{ forms.textField({
+                label: 'Form ID'|t('leads'),
+                id: 'convertkitFormId',
+                name: 'integrationSettings[formId]',
+                value: provider == 'convertkit' ? (integration.formId ?? '') : '',
+                class: 'code',
+            }) }}
+        </div>
+
+        <div id="integration-webhook"{% if provider != 'webhook' %} class="hidden"{% endif %}>
+            {{ forms.autosuggestField({
+                label: 'Webhook URL'|t('leads'),
+                instructions: 'Each submission is POSTed here as JSON. It has to be a public address; redirects aren’t followed.'|t('leads'),
+                id: 'webhookUrl',
+                name: 'integrationSettings[webhookUrl]',
+                value: provider == 'webhook' ? (integration.webhookUrl ?? '') : '',
+                suggestEnvVars: true,
+                class: 'code',
+            }) }}
+        </div>
 
         <hr>
 
@@ -195,13 +253,24 @@
 
     {% if not isNew %}
         <hr>
+        {# Not a nested <form>: inside the page's form a browser drops the inner form tag, and its
+           `action` input then rides along with every Save. #}
         <div class="buttons">
-            <form method="post" style="display:inline">
-                {{ csrfInput() }}
-                <input type="hidden" name="action" value="leads/popups/duplicate">
-                <input type="hidden" name="popupId" value="{{ popup.id }}">
-                <button type="submit" class="btn">{{ 'Duplicate'|t('leads') }}</button>
-            </form>
+            <button type="button" class="btn" id="leads-duplicate" data-popup-id="{{ popup.id }}">{{ 'Duplicate'|t('leads') }}</button>
         </div>
+        {% js %}
+        document.getElementById('leads-duplicate')?.addEventListener('click', function(e) {
+            var button = e.currentTarget;
+            button.disabled = true;
+            Craft.sendActionRequest('POST', 'leads/popups/duplicate', { data: { popupId: button.dataset.popupId } })
+                .then(function(response) {
+                    window.location.href = Craft.getCpUrl('leads/popups/' + response.data.id);
+                })
+                .catch(function(error) {
+                    button.disabled = false;
+                    Craft.cp.displayError(error?.response?.data?.message || Craft.t('leads', 'Couldn’t duplicate popup.'));
+                });
+        });
+        {% endjs %}
     {% endif %}
 {% endblock %}

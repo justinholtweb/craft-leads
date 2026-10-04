@@ -41,8 +41,15 @@ return [
     'dataRetentionDays' => 365,
     'enableHoneypot' => true,
     'rateLimitPerMinute' => 5,
+    'trackingPerMinute' => 60,
+    // Config only: let webhooks reach private/loopback addresses (an internal CRM, say).
+    'allowPrivateWebhookHosts' => false,
 ];
 ```
+
+Settings are project config, so the Settings screen saves only for an admin on an environment where `allowAdminChanges` is on; everywhere else it is read-only.
+
+`rateLimitPerMinute` (submissions) and `trackingPerMinute` (impression/conversion/close events) are per visitor address, each under a site-wide ceiling of 20× the value. The address is the connecting one: `X-Forwarded-For` is only believed when you have set Craft's `trustedHosts` to your proxies — if your site sits behind a load balancer or CDN, set it, or every visitor shares one budget.
 
 ## Usage
 
@@ -113,7 +120,7 @@ Each popup can sync submissions to an email service provider. Syncing happens in
 ### Mailchimp
 
 Set `integrationProvider` to `mailchimp` and provide:
-- `apiKey` — Your Mailchimp API key (ends with `-usX`)
+- `apiKey` — Your Mailchimp API key (ends with `-usX`; the data centre is checked before any request is made)
 - `listId` — The audience/list ID to add subscribers to
 
 ### ConvertKit
@@ -127,6 +134,10 @@ Set `integrationProvider` to `convertkit` and provide:
 Set `integrationProvider` to `webhook` and provide:
 - `webhookUrl` — URL to receive a POST with `{ email, name, custom_fields, timestamp }`
 
+A webhook URL must be `http`/`https`, carry no credentials, and resolve only to public addresses; the request is pinned to the address that was checked and doesn't follow redirects. Set `allowPrivateWebhookHosts` in `config/leads.php` to send to an internal host.
+
+Every integration setting can be an environment variable (`$MAILCHIMP_API_KEY`) so keys stay out of the database. A popup won't save while a referenced variable is unset.
+
 ## Analytics
 
 Leads tracks three daily metrics per popup:
@@ -139,7 +150,7 @@ Stats are aggregated daily (one row per popup per day) for efficient querying. V
 
 ## Submissions
 
-All form submissions are stored in the `leads_submissions` table and viewable under **Leads → Submissions**. Export as CSV for use in other tools.
+All form submissions are stored in the `leads_submissions` table and viewable under **Leads → Submissions**. Export as CSV for use in other tools; cells a spreadsheet would run as a formula (starting `=`, `+`, `-`, `@`) are prefixed with `'` so they open as text.
 
 ## Permissions
 
@@ -151,7 +162,7 @@ All form submissions are stored in the `leads_submissions` table and viewable un
 | `leads:exportSubmissions` | Export submissions as CSV |
 | `leads:deleteSubmissions` | Delete individual submissions |
 | `leads:viewDashboard` | View the analytics dashboard |
-| `leads:manageSettings` | Modify plugin settings |
+| `leads:manageSettings` | See the Settings screen (saving needs an admin where admin changes are allowed) |
 
 ## Events
 
