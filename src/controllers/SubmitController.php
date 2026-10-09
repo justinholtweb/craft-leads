@@ -55,18 +55,32 @@ class SubmitController extends Controller
         }
 
         // Validate email
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (!is_string($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return $this->asJson(['success' => false, 'error' => 'Invalid email address.']);
         }
 
-        $success = Plugin::getInstance()->submissions->submit(
+        // A required consent box is checked here as well as in the browser: the page script is
+        // only a convenience, and a submission without consent the popup asked for isn't kept.
+        $consentSettings = $popup->getConsent();
+        $consent = $consentSettings['checkbox'] ? in_array($request->getBodyParam('consent'), [true, 1, '1', 'on', 'yes'], true) : null;
+
+        if ($consentSettings['required'] && $consent !== true) {
+            return $this->asJson(['success' => false, 'error' => Craft::t('leads', 'Please tick the box to agree.')]);
+        }
+
+        $submission = Plugin::getInstance()->submissions->create(
             $popupId,
             $email,
-            $name,
-            $customFields,
-            $pageUrl
+            is_string($name) ? $name : null,
+            is_array($customFields) ? $customFields : [],
+            is_string($pageUrl) ? $pageUrl : '',
+            $consent,
         );
 
-        return $this->asJson(['success' => $success]);
+        return $this->asJson([
+            'success' => $submission !== null,
+            // Tells the page to say "check your inbox" rather than "thanks".
+            'confirm' => $submission !== null && $popup->getSendsConfirmation(),
+        ]);
     }
 }

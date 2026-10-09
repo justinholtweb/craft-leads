@@ -292,3 +292,41 @@
         flex-wrap: wrap;
     }
 }
+
+/* Consent checkbox */
+.leads-consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+}
+
+.leads-consent input {
+    flex: none;
+    margin-top: 2px;
+    width: 16px;
+    height: 16px;
+}
+
+.leads-consent a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+/* In a one-row form the checkbox gets a line of its own, under the fields. */
+.leads-form-inline:has(.leads-consent) {
+    flex-wrap: wrap;
+}
+
+.leads-form-inline .leads-consent {
+    flex-basis: 100%;
+    order: 10;
+}
+
+.leads-error {
+    font-size: 13px;
+    color: #dc2626;
+}

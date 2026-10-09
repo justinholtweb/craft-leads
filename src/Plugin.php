@@ -40,7 +40,7 @@ use yii\base\Event;
  */
 class Plugin extends BasePlugin
 {
-    public string $schemaVersion = '1.0.0';
+    public string $schemaVersion = '1.1.0';
     public bool $hasCpSettings = true;
     public bool $hasCpSection = true;
 
@@ -196,6 +196,9 @@ class Plugin extends BasePlugin
 
                 // Tracking
                 $event->rules['leads/track'] = 'leads/tracking/track';
+
+                // Double opt-in confirmation links
+                $event->rules['leads/confirm'] = 'leads/confirm/index';
             }
         );
     }
@@ -282,6 +285,9 @@ class Plugin extends BasePlugin
             Gc::class,
             Gc::EVENT_RUN,
             function() {
+                // Sign-ups nobody confirmed in time were never consented to; they aren't kept.
+                $this->submissions->purgeExpiredUnconfirmed();
+
                 $days = $this->getSettings()->dataRetentionDays;
                 if ($days <= 0) {
                     return;

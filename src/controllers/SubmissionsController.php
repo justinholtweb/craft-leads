@@ -3,7 +3,9 @@
 namespace justinholtweb\leads\controllers;
 
 use Craft;
+use craft\helpers\Db;
 use craft\web\Controller;
+use justinholtweb\leads\enums\SyncStatus;
 use justinholtweb\leads\Plugin;
 use yii\web\Response;
 
@@ -44,6 +46,9 @@ class SubmissionsController extends Controller
             'page' => $page,
             'limit' => $limit,
             'popupId' => $popupId,
+            'syncStatuses' => array_column(array_map(static fn(SyncStatus $s) => ['key' => $s->value, 'status' => $s], SyncStatus::cases()), 'status', 'key'),
+            // The confirmation dates are stored in UTC; compared as strings in the same format.
+            'nowUtc' => Db::prepareDateForDb(new \DateTime()),
         ]);
     }
 
@@ -57,13 +62,18 @@ class SubmissionsController extends Controller
         );
 
         $handle = fopen('php://temp', 'r+');
-        fputcsv($handle, ['Email', 'Name', 'Page URL', 'Sync Status', 'Date'], ',', '"', '');
+        fputcsv($handle, ['Email', 'Name', 'Page URL', 'Sync Status', 'Consent', 'Consent Text', 'Consent Version', 'Consented At (UTC)', 'Confirmed At (UTC)', 'Date'], ',', '"', '');
         foreach ($submissions as $row) {
             fputcsv($handle, array_map([self::class, 'csvCell'], [
                 (string)$row['email'],
                 (string)($row['name'] ?? ''),
                 (string)($row['pageUrl'] ?? ''),
                 (string)$row['syncStatus'],
+                $row['consentGiven'] === null ? '' : ((bool)$row['consentGiven'] ? 'yes' : 'no'),
+                (string)($row['consentText'] ?? ''),
+                (string)($row['consentVersion'] ?? ''),
+                (string)($row['consentedAt'] ?? ''),
+                (string)($row['confirmedAt'] ?? ''),
                 (string)$row['dateCreated'],
             ]), ',', '"', '');
         }

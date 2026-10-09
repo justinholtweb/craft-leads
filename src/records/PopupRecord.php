@@ -21,6 +21,7 @@ use craft\db\ActiveRecord;
  * @property array|null $targetingRules
  * @property string|null $integrationProvider
  * @property array|null $integrationSettings
+ * @property array|null $consentSettings
  * @property string|null $position
  * @property string $popupStatus
  * @property int $priority

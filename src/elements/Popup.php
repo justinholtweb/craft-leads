@@ -12,6 +12,7 @@ use craft\helpers\UrlHelper;
 use justinholtweb\leads\elements\db\PopupQuery;
 use justinholtweb\leads\enums\PopupStatus;
 use justinholtweb\leads\enums\PopupType;
+use justinholtweb\leads\helpers\Optin;
 use justinholtweb\leads\helpers\Targeting;
 use justinholtweb\leads\records\PopupRecord;
 use yii\base\InvalidConfigException;
@@ -33,6 +34,7 @@ class Popup extends Element
     public array|string|null $targetingRules = null;
     public ?string $integrationProvider = null;
     public array|string|null $integrationSettings = null;
+    public array|string|null $consentSettings = null;
     public ?string $position = null;
     public string $popupStatus = 'draft';
     public int $priority = 0;
@@ -233,6 +235,7 @@ class Popup extends Element
         $rules[] = [['priority'], 'integer'];
         $rules[] = [['integrationSettings'], 'validateIntegrationSettings', 'skipOnEmpty' => false];
         $rules[] = [['targetingRules'], 'validateTargetingRules', 'skipOnEmpty' => false];
+        $rules[] = [['consentSettings'], 'validateConsentSettings', 'skipOnEmpty' => false];
 
         return $rules;
     }
@@ -262,6 +265,39 @@ class Popup extends Element
         foreach (Targeting::problems($this->getTargeting()) as $problem) {
             $this->addError($attribute, Craft::t('leads', $problem));
         }
+    }
+
+    /**
+     * Refuses a consent checkbox with no wording, and a provider confirmation the chosen provider
+     * can't do — the webhook has no "pending" to put anybody in.
+     */
+    public function validateConsentSettings(string $attribute): void
+    {
+        foreach (Optin::problems($this->getConsent(), $this->integrationProvider) as $problem) {
+            $this->addError($attribute, Craft::t('leads', $problem));
+        }
+    }
+
+    /**
+     * The popup's consent checkbox and double opt-in settings, every key set.
+     *
+     * @return array{checkbox: bool, required: bool, text: string, doubleOptIn: string}
+     */
+    public function getConsent(): array
+    {
+        return Optin::normalize($this->normalizeJsonValue($this->consentSettings));
+    }
+
+    /** Whether Leads itself emails a confirmation link before a sign-up goes anywhere. */
+    public function getSendsConfirmation(): bool
+    {
+        return $this->getConsent()['doubleOptIn'] === Optin::MODE_EMAIL;
+    }
+
+    /** The consent checkbox's wording as HTML, links and all. */
+    public function getConsentHtml(): string
+    {
+        return Optin::html($this->getConsent()['text']);
     }
 
     /**
@@ -331,6 +367,8 @@ class Popup extends Element
         $record->targetingRules = $this->getTargetingRulesArray() ?: null;
         $record->integrationProvider = $this->integrationProvider;
         $record->integrationSettings = $this->getIntegrationSettingsArray() ?: null;
+        $consent = $this->getConsent();
+        $record->consentSettings = $consent['checkbox'] || $consent['doubleOptIn'] !== Optin::MODE_OFF ? $consent : null;
         $record->position = $this->position;
         $record->popupStatus = $this->popupStatus;
         $record->priority = $this->priority;

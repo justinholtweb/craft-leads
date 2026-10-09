@@ -54,6 +54,7 @@ class Popups extends Component
         $duplicate->targetingRules = $original->targetingRules;
         $duplicate->integrationProvider = $original->integrationProvider;
         $duplicate->integrationSettings = $original->integrationSettings;
+        $duplicate->consentSettings = $original->consentSettings;
         $duplicate->position = $original->position;
         $duplicate->popupStatus = PopupStatus::Draft->value;
         $duplicate->priority = $original->priority;

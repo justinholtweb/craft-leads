@@ -1,0 +1,9 @@
+{#- The consent checkbox, when the popup asks for one. The wording is escaped; only
+    `[label](url)` links survive, as links (see helpers\Optin::html()). -#}
+{% set consent = popup.getConsent() %}
+{% if consent.checkbox %}
+    <label class="leads-consent">
+        <input type="checkbox" name="consent" value="1"{{ consent.required ? ' required' }}>
+        <span>{{ popup.getConsentHtml()|raw }}</span>
+    </label>
+{% endif %}

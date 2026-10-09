@@ -89,6 +89,69 @@
 
         <hr>
 
+        <h2>{{ 'Double Opt-in'|t('leads') }}</h2>
+
+        <p class="light">{{ 'Used by popups whose double opt-in is set to “Leads emails a confirmation link”. Sent with Craft’s email settings.'|t('leads') }}</p>
+
+        {{ forms.textField({
+            label: 'Confirmation Email Subject'|t('leads'),
+            instructions: '`{siteName}` and `{popup}` are filled in.'|t('leads'),
+            id: 'confirmationSubject',
+            name: 'settings[confirmationSubject]',
+            value: settings.confirmationSubject,
+            errors: settings.getErrors('confirmationSubject'),
+        }) }}
+
+        {{ forms.textareaField({
+            label: 'Confirmation Email'|t('leads'),
+            instructions: 'Plain text. `{link}` (required), `{siteName}`, `{popup}` and `{hours}` are filled in.'|t('leads'),
+            id: 'confirmationBody',
+            name: 'settings[confirmationBody]',
+            value: settings.confirmationBody,
+            rows: 8,
+            errors: settings.getErrors('confirmationBody'),
+        }) }}
+
+        {{ forms.textField({
+            label: 'Link Expiry (Hours)'|t('leads'),
+            instructions: 'How long a confirmation link works. Sign-ups not confirmed by then are deleted.'|t('leads'),
+            id: 'confirmationExpiryHours',
+            name: 'settings[confirmationExpiryHours]',
+            value: settings.confirmationExpiryHours,
+            type: 'number',
+            min: 1,
+            max: 720,
+            errors: settings.getErrors('confirmationExpiryHours'),
+        }) }}
+
+        {{ forms.textField({
+            label: 'Confirmation Page Template'|t('leads'),
+            instructions: 'A site template to show the confirmation page with. It gets `state` (`ask`, `confirmed` or `invalid`), `code` and `popup`, and has to post `code` to `leads/confirm/index`. Leave blank for Leads’ own page.'|t('leads'),
+            id: 'confirmationTemplate',
+            name: 'settings[confirmationTemplate]',
+            value: settings.confirmationTemplate,
+            class: 'code',
+            errors: settings.getErrors('confirmationTemplate'),
+        }) }}
+
+        {{ forms.textField({
+            label: 'Lock Consent Purpose'|t('leads'),
+            instructions: (lockInstalled
+                ? 'A confirmed sign-up whose consent box was ticked is recorded in Lock’s consent ledger under this purpose. Leave blank to not record it.'
+                : 'When Lock is installed, a confirmed sign-up whose consent box was ticked is recorded in its consent ledger under this purpose.')|t('leads'),
+            id: 'lockPurpose',
+            name: 'settings[lockPurpose]',
+            value: settings.lockPurpose,
+            class: 'code',
+            errors: settings.getErrors('lockPurpose'),
+        }) }}
+
+        {% if tossActive %}
+            <p class="light">{{ 'Toss is managing cookie consent on this site, so each submission also records the visitor’s Toss consent choices.'|t('leads') }}</p>
+        {% endif %}
+
+        <hr>
+
         <h2>{{ 'Data'|t('leads') }}</h2>
 
         {{ forms.textField({

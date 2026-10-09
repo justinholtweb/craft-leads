@@ -15,6 +15,15 @@ use craft\db\ActiveRecord;
  * @property string $pageUrl
  * @property string $syncStatus
  * @property string|null $syncedAt
+ * @property bool|null $consentGiven
+ * @property string|null $consentText
+ * @property string|null $consentVersion
+ * @property string|null $consentedAt
+ * @property array|string|null $consentEvidence Decoded on MySQL, JSON text on MariaDB
+ * @property string|null $confirmTokenHash
+ * @property string|null $confirmExpiresAt
+ * @property string|null $confirmedAt
+ * @property string $dateCreated
  */
 class SubmissionRecord extends ActiveRecord
 {

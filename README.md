@@ -24,6 +24,8 @@ php craft plugin/install leads
 | Integrations | Mailchimp, ConvertKit, webhook |
 | Analytics | Impressions, conversions, conversion rates |
 | Targeting | Page URLs, device type, visitor frequency, new/returning visitors, page-view minimums |
+| Consent | Optional or required consent checkbox, with the wording stored on each submission |
+| Double opt-in | Leads emails a confirmation link, or Mailchimp/ConvertKit confirm themselves |
 | Spam protection | Honeypot field, rate limiting |
 | Queue sync | Background sync to email providers via Craft queue |
 
@@ -42,6 +44,12 @@ return [
     'enableHoneypot' => true,
     'rateLimitPerMinute' => 5,
     'trackingPerMinute' => 60,
+    // Double opt-in (see "Consent & Double Opt-in")
+    'confirmationExpiryHours' => 48,
+    'confirmationSubject' => 'Please confirm your subscription to {siteName}',
+    'confirmationBody' => "…{link}…",
+    'confirmationTemplate' => '',
+    'lockPurpose' => 'marketing',
     // Config only: let webhooks reach private/loopback addresses (an internal CRM, say).
     'allowPrivateWebhookHosts' => false,
 ];
@@ -166,11 +174,63 @@ Set `integrationProvider` to `convertkit` and provide:
 ### Webhook
 
 Set `integrationProvider` to `webhook` and provide:
-- `webhookUrl` — URL to receive a POST with `{ email, name, custom_fields, timestamp }`
+- `webhookUrl` — URL to receive a POST with `{ email, name, custom_fields, timestamp }`, plus `consent` (`given`, `text`, `version`, `consented_at`, `confirmed_at`, `double_opt_in`) when the popup asks for consent or uses double opt-in
 
 A webhook URL must be `http`/`https`, carry no credentials, and resolve only to public addresses; the request is pinned to the address that was checked and doesn't follow redirects. Set `allowPrivateWebhookHosts` in `config/leads.php` to send to an internal host.
 
 Every integration setting can be an environment variable (`$MAILCHIMP_API_KEY`) so keys stay out of the database. A popup won't save while a referenced variable is unset.
+
+## Consent & Double Opt-in
+
+Each popup's editor has a **Consent & Confirmation** section.
+
+### Consent checkbox
+
+Turn on **Ask for consent** to show a checkbox under the fields, with your wording. Write `[privacy policy](/privacy)` for a link; everything else is shown as plain text. Mark it **Required** and the form won't submit until it's ticked: the browser stops it, and the server refuses it too.
+
+Each submission stores whether the box was ticked, the exact wording as it was at that moment, a SHA-256 version of the wording, and when. Rewording the popup later doesn't change what an earlier submission agreed to. The Submissions screen shows it, and the CSV export includes it.
+
+### Double opt-in
+
+| Setting | What happens |
+|---|---|
+| **Off** | The sign-up goes to the integration straight away. |
+| **Leads emails a confirmation link** | Leads stores the sign-up as *Awaiting confirmation* and emails a link. Nothing goes to Mailchimp, ConvertKit or the webhook until the link is used. |
+| **The email provider confirms** | Mailchimp gets the member as `pending` and emails them itself. ConvertKit confirms if the form's own double opt-in ("incentive email") is on in ConvertKit. Not available for the webhook. |
+
+With Leads sending the email:
+
+- The link opens a page with a **Confirm** button. Opening the link changes nothing; the button does. Mail scanners and link previewers open every link in an email, so a link that confirmed on opening would sign up everyone whose mail provider checks links.
+- A link works **once**, and for `confirmationExpiryHours` (48 by default). Only a SHA-256 hash of its token is stored, and it's looked up by exact match.
+- Sign-ups still unconfirmed when their link expires are deleted when Craft collects garbage.
+- The email is plain text from the **Double Opt-in** settings, with `{link}`, `{siteName}`, `{popup}` and `{hours}` filled in. It's sent with Craft's email settings.
+- Set **Confirmation Page Template** to show the page in your own site template. It gets `state` (`ask`, `confirmed` or `invalid`), `code` and `popup`, and has to post `code` back:
+
+```twig
+{% if state == 'ask' %}
+    <form method="post">
+        {{ csrfInput() }}
+        {{ actionInput('leads/confirm/index') }}
+        {{ hiddenInput('code', code) }}
+        <button>Confirm my subscription</button>
+    </form>
+{% elseif state == 'confirmed' %}
+    <p>You're subscribed.</p>
+{% else %}
+    <p>This link has expired or has already been used.</p>
+{% endif %}
+```
+
+The page's URL carries the token, so Leads sends it with `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. In your own template, also put `<meta name="referrer" content="no-referrer">` in the `<head>`, in case another plugin sends a weaker Referrer-Policy header.
+
+The submit endpoint answers `{ "success": true, "confirm": true }` when a confirmation email went out, for custom front ends.
+
+### Toss and Lock
+
+Leads works on its own. Two other plugins add to it when they're installed:
+
+- **[Toss](https://github.com/justinholtweb/craft-toss)**: when Toss manages the site's cookie consent, each submission also stores the visitor's Toss choices (categories granted, whether they'd decided, Global Privacy Control), read during the submission itself.
+- **[Lock](https://github.com/justinholtweb/craft-lock)**: when a double opt-in sign-up with its consent box ticked is confirmed, Leads records the consent in Lock's consent ledger under the `lockPurpose` setting (`marketing` by default; blank turns it off), marked verified, with the wording, page and date. Unconfirmed sign-ups are never recorded there, because anyone can type anyone's address into a form.
 
 ## Analytics
 
@@ -184,7 +244,7 @@ Stats are aggregated daily (one row per popup per day) for efficient querying. V
 
 ## Submissions
 
-All form submissions are stored in the `leads_submissions` table and viewable under **Leads → Submissions**. Export as CSV for use in other tools; cells a spreadsheet would run as a formula (starting `=`, `+`, `-`, `@`) are prefixed with `'` so they open as text.
+All form submissions are stored in the `leads_submissions` table and viewable under **Leads → Submissions**. Each shows its consent and where it is in syncing: *Pending*, *Synced*, *Failed*, *Awaiting confirmation* (double opt-in), *Link expired*, or *Not synced* for a popup with no integration. Export as CSV for use in other tools; cells a spreadsheet would run as a formula (starting `=`, `+`, `-`, `@`) are prefixed with `'` so they open as text.
 
 ## Permissions
 
@@ -203,17 +263,24 @@ All form submissions are stored in the `leads_submissions` table and viewable un
 Listen to events in a custom module or plugin:
 
 ```php
-use justinholtweb\leads\events\PopupEvent;
+use craft\events\ModelEvent;
+use justinholtweb\leads\elements\Popup;
 use justinholtweb\leads\events\SubmissionEvent;
+use justinholtweb\leads\services\Submissions;
 
 // After a popup is saved
-Event::on(Popup::class, Popup::EVENT_AFTER_SAVE, function (PopupEvent $event) {
-    // $event->popup, $event->isNew
+Event::on(Popup::class, Popup::EVENT_AFTER_SAVE, function (ModelEvent $event) {
+    // $event->sender, $event->isNew
 });
 
-// After a submission is created
-Event::on(Submissions::class, 'afterSubmit', function (SubmissionEvent $event) {
+// After a submission is stored (confirmed or not yet: check $event->submission->syncStatus)
+Event::on(Submissions::class, Submissions::EVENT_AFTER_SUBMIT, function (SubmissionEvent $event) {
     // $event->submission
+});
+
+// After a double opt-in sign-up is confirmed, before it goes to the integration
+Event::on(Submissions::class, Submissions::EVENT_AFTER_CONFIRM, function (SubmissionEvent $event) {
+    // $event->submission->confirmedAt, ->consentText
 });
 ```
 
@@ -234,6 +301,7 @@ Plugin::getInstance()->submissions->submit(
     popupId: 123,
     email: 'user@example.com',
     name: 'Jane Doe',
+    consent: true, // whether the consent box was ticked; ignored when the popup doesn't ask
 );
 
 // Get analytics

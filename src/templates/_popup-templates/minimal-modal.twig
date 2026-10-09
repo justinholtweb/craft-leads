@@ -10,9 +10,10 @@
         {% else %}
             <input type="email" name="email" placeholder="Your email address" required class="leads-input">
         {% endfor %}
+        {% include 'leads/_popup-templates/_consent' %}
         <button type="submit" class="leads-btn" style="background-color: {{ popup.buttonColor ?? '#3b82f6' }}">{{ popup.buttonText ?? 'Subscribe' }}</button>
     </form>
     <div class="leads-success" style="display:none;">
-        <p>Thanks for subscribing!</p>
+        <p>{{ popup.sendsConfirmation ? 'Almost done: check your inbox and click the link to confirm.'|t('leads') : 'Thanks for subscribing!'|t('leads') }}</p>
     </div>
 </div>

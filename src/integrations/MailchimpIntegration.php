@@ -23,27 +23,36 @@ class MailchimpIntegration extends AbstractIntegration
 
         $url = "https://{$dc}.api.mailchimp.com/3.0/lists/" . rawurlencode((string)$listId) . '/members';
 
-        $mergeFields = [];
-        if ($name) {
-            $parts = explode(' ', $name, 2);
-            $mergeFields['FNAME'] = $parts[0];
-            if (isset($parts[1])) {
-                $mergeFields['LNAME'] = $parts[1];
-            }
-        }
-
-        $data = [
-            'email_address' => $email,
-            'status' => 'subscribed',
-        ];
-
-        if (!empty($mergeFields)) {
-            $data['merge_fields'] = $mergeFields;
-        }
+        $data = $this->memberPayload($email, $name);
 
         $response = $this->request($url, $data, $apiKey);
 
-        return $response !== null && !isset($response['status']) || (isset($response['status']) && $response['status'] === 'subscribed');
+        return $response !== null && !isset($response['status']) || (isset($response['status']) && in_array($response['status'], ['subscribed', 'pending'], true));
+    }
+
+    /**
+     * The member Mailchimp is sent. `pending` when the popup leaves confirming to Mailchimp, which
+     * then emails the person itself; `subscribed` otherwise, including after Leads' own
+     * confirmation.
+     *
+     * @return array<string, mixed>
+     */
+    public function memberPayload(string $email, ?string $name = null): array
+    {
+        $data = [
+            'email_address' => $email,
+            'status' => $this->providerConfirms ? 'pending' : 'subscribed',
+        ];
+
+        if ($name) {
+            $parts = explode(' ', $name, 2);
+            $data['merge_fields'] = ['FNAME' => $parts[0]];
+            if (isset($parts[1])) {
+                $data['merge_fields']['LNAME'] = $parts[1];
+            }
+        }
+
+        return $data;
     }
 
     public function testConnection(): array

@@ -246,6 +246,50 @@
 
         <hr>
 
+        <h2>{{ 'Consent & Confirmation'|t('leads') }}</h2>
+
+        {% set consent = popup.getConsent() %}
+        {{ forms.errorList(popup.getErrors('consentSettings')) }}
+
+        {{ forms.lightswitchField({
+            label: 'Ask for consent'|t('leads'),
+            instructions: 'Show a checkbox under the fields. Each submission keeps the wording it was shown, with the date.'|t('leads'),
+            id: 'consentCheckbox',
+            name: 'consentSettings[checkbox]',
+            on: consent.checkbox,
+            toggle: 'leads-consent-fields',
+        }) }}
+
+        <div id="leads-consent-fields"{% if not consent.checkbox %} class="hidden"{% endif %}>
+            {{ forms.textareaField({
+                label: 'Consent text'|t('leads'),
+                instructions: 'What the checkbox says. Plain text; write `[privacy policy](/privacy)` for a link.'|t('leads'),
+                id: 'consentText',
+                name: 'consentSettings[text]',
+                value: consent.text ?: defaultConsentText,
+                rows: 2,
+            }) }}
+
+            {{ forms.lightswitchField({
+                label: 'Required'|t('leads'),
+                instructions: 'The form won’t submit until the box is ticked.'|t('leads'),
+                id: 'consentRequired',
+                name: 'consentSettings[required]',
+                on: consent.required,
+            }) }}
+        </div>
+
+        {{ forms.selectField({
+            label: 'Double opt-in'|t('leads'),
+            instructions: 'With Leads sending the email, a sign-up goes to the integration only after the visitor clicks the link in it. Unconfirmed sign-ups are deleted once the link expires.'|t('leads'),
+            id: 'consentDoubleOptIn',
+            name: 'consentSettings[doubleOptIn]',
+            value: consent.doubleOptIn,
+            options: doubleOptInOptions,
+        }) }}
+
+        <hr>
+
         <h2>{{ 'Targeting Rules'|t('leads') }}</h2>
 
         {% set targeting = popup.getTargeting() %}

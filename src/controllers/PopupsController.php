@@ -10,6 +10,7 @@ use justinholtweb\leads\enums\PopupPosition;
 use justinholtweb\leads\enums\PopupStatus;
 use justinholtweb\leads\enums\PopupType;
 use justinholtweb\leads\enums\TriggerType;
+use justinholtweb\leads\helpers\Optin;
 use justinholtweb\leads\helpers\Targeting;
 use justinholtweb\leads\Plugin;
 use yii\web\NotFoundHttpException;
@@ -115,6 +116,12 @@ class PopupsController extends Controller
             ['label' => Craft::t('leads', 'Returning visitors'), 'value' => 'returning'],
         ];
 
+        $doubleOptInOptions = [
+            ['label' => Craft::t('leads', 'Off'), 'value' => Optin::MODE_OFF],
+            ['label' => Craft::t('leads', 'Leads emails a confirmation link'), 'value' => Optin::MODE_EMAIL],
+            ['label' => Craft::t('leads', 'The email provider confirms (Mailchimp, ConvertKit)'), 'value' => Optin::MODE_PROVIDER],
+        ];
+
         return $this->renderTemplate('leads/popups/edit', [
             'popup' => $popup,
             'isNew' => $isNew,
@@ -128,6 +135,8 @@ class PopupsController extends Controller
             'deviceOptions' => $deviceOptions,
             'frequencyOptions' => $frequencyOptions,
             'visitorOptions' => $visitorOptions,
+            'doubleOptInOptions' => $doubleOptInOptions,
+            'defaultConsentText' => Craft::t('leads', Optin::DEFAULT_TEXT),
         ]);
     }
 
@@ -173,6 +182,7 @@ class PopupsController extends Controller
                 array_flip(\justinholtweb\leads\services\Integrations::FIELDS[$popup->integrationProvider] ?? []),
             ))
             : null;
+        $popup->consentSettings = Optin::normalize($request->getBodyParam('consentSettings', []));
         $popup->position = $request->getBodyParam('position') ?: null;
         $popup->popupStatus = $request->getBodyParam('popupStatus', 'draft');
         $popup->priority = (int)$request->getBodyParam('priority', 0);

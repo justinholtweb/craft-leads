@@ -44,6 +44,7 @@ class Install extends Migration
             'targetingRules' => $this->json()->null(),
             'integrationProvider' => $this->string(50)->null(),
             'integrationSettings' => $this->json()->null(),
+            'consentSettings' => $this->json()->null(),
             'position' => $this->string(50)->null(),
             'popupStatus' => $this->string(20)->notNull()->defaultValue('draft'),
             'priority' => $this->integer()->notNull()->defaultValue(0),
@@ -65,6 +66,7 @@ class Install extends Migration
             'pageUrl' => $this->string(500)->notNull(),
             'syncStatus' => $this->string(20)->notNull()->defaultValue('pending'),
             'syncedAt' => $this->dateTime()->null(),
+            ...self::submissionConsentColumns($this),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),
@@ -84,6 +86,32 @@ class Install extends Migration
         ]);
     }
 
+    /**
+     * A submission's consent and confirmation, shared with the migration that added them.
+     *
+     * - `consentGiven`: null when the popup asked nothing, else whether the box was ticked.
+     * - `consentText` / `consentVersion`: the wording as it was when they submitted, and its hash.
+     * - `consentEvidence`: what else was known then — the Toss consent snapshot, when Toss is the
+     *   site's consent manager.
+     * - `confirmTokenHash`: sha256 of the emailed token, never the token; cleared once used.
+     * - `confirmExpiresAt` / `confirmedAt`: bare UTC, like every other date Craft stores.
+     *
+     * @return array<string, \yii\db\ColumnSchemaBuilder>
+     */
+    public static function submissionConsentColumns(Migration $m): array
+    {
+        return [
+            'consentGiven' => $m->boolean()->null(),
+            'consentText' => $m->text()->null(),
+            'consentVersion' => $m->char(64)->null(),
+            'consentedAt' => $m->dateTime()->null(),
+            'consentEvidence' => $m->json()->null(),
+            'confirmTokenHash' => $m->char(64)->null(),
+            'confirmExpiresAt' => $m->dateTime()->null(),
+            'confirmedAt' => $m->dateTime()->null(),
+        ];
+    }
+
     private function createIndexes(): void
     {
         // Popups
@@ -96,6 +124,8 @@ class Install extends Migration
         $this->createIndex(null, '{{%leads_submissions}}', ['email']);
         $this->createIndex(null, '{{%leads_submissions}}', ['syncStatus']);
         $this->createIndex(null, '{{%leads_submissions}}', ['dateCreated']);
+        $this->createIndex(null, '{{%leads_submissions}}', ['confirmTokenHash'], true);
+        $this->createIndex(null, '{{%leads_submissions}}', ['confirmExpiresAt']);
 
         // Stats
         $this->createIndex(null, '{{%leads_stats}}', ['popupId', 'date'], true);

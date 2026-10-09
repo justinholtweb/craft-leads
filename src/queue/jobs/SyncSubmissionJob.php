@@ -4,8 +4,10 @@ namespace justinholtweb\leads\queue\jobs;
 
 use Craft;
 use craft\queue\BaseJob;
+use justinholtweb\leads\helpers\Optin;
 use justinholtweb\leads\Plugin;
 use justinholtweb\leads\records\SubmissionRecord;
+use justinholtweb\leads\services\Submissions;
 
 class SyncSubmissionJob extends BaseJob
 {
@@ -17,6 +19,12 @@ class SyncSubmissionJob extends BaseJob
 
         if (!$record) {
             throw new \RuntimeException("Submission {$this->submissionId} not found.");
+        }
+
+        // A double opt-in sign-up that hasn't been confirmed goes nowhere, however this job came
+        // to be queued.
+        if (!Submissions::isReleasable($record)) {
+            return;
         }
 
         $popup = Plugin::getInstance()->popups->getById($record->popupId);
@@ -39,6 +47,18 @@ class SyncSubmissionJob extends BaseJob
             Craft::error("Unknown integration provider: {$popup->integrationProvider}", 'leads');
             return;
         }
+
+        // With the provider confirming, Mailchimp gets the member as `pending` and sends its own
+        // confirmation email.
+        $integration->providerConfirms = $popup->getConsent()['doubleOptIn'] === Optin::MODE_PROVIDER;
+        $integration->consent = array_filter([
+            'given' => $record->consentGiven === null ? null : (bool)$record->consentGiven,
+            'text' => $record->consentText,
+            'version' => $record->consentVersion,
+            'consented_at' => $record->consentedAt,
+            'confirmed_at' => $record->confirmedAt,
+            'double_opt_in' => $popup->getConsent()['doubleOptIn'],
+        ], static fn($value) => $value !== null);
 
         // The json() column decodes to an array; coerce anything unexpected to [].
         $customFields = $record->customFields;

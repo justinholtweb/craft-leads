@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Consent checkbox.** A popup can show a consent checkbox with your own wording (`[label](/url)` makes a link), optional or required. A required box is enforced by the server as well as the browser. Each submission stores whether it was ticked, the wording exactly as shown, a SHA-256 version of that wording and the time, so rewording a popup never changes what an earlier sign-up agreed to. The Submissions screen and the CSV export show it.
+- **Double opt-in.** Per popup: Leads can email a confirmation link, or leave confirming to the provider (Mailchimp gets the member as `pending`; ConvertKit uses the form's own setting). With Leads' email, a sign-up waits as *Awaiting confirmation* and reaches no integration until the link is used. The link opens a page with a Confirm button (opening it changes nothing, so mail scanners can't confirm anybody), works once, expires after `confirmationExpiryHours` (48), and is looked up by an exact match on its stored hash. Unconfirmed sign-ups whose link has expired are deleted at garbage collection.
+- Double opt-in settings: the email's subject and text (plain text with `{link}`, `{siteName}`, `{popup}` and `{hours}`), the link's lifetime, and an optional site template for the confirmation page.
+- When Toss manages the site's cookie consent, each submission also stores the visitor's Toss choices, read in the submission request.
+- When Lock is installed, a confirmed double opt-in sign-up whose consent box was ticked is recorded in Lock's consent ledger, marked verified, under the new `lockPurpose` setting (`marketing`). Unconfirmed sign-ups never are.
+- The webhook payload carries a `consent` object when the popup asks for consent or uses double opt-in.
+- `Submissions::EVENT_AFTER_SUBMIT` and `Submissions::EVENT_AFTER_CONFIRM`. The README already documented an `afterSubmit` event; it is now raised.
+
+### Fixed
+
+- **Submissions were never sent to Mailchimp, ConvertKit or the webhook.** The sync job existed but nothing queued it, so every submission sat at *Pending*. It is now queued when a submission is stored, or when a double opt-in sign-up is confirmed. A popup with no integration now records *Not synced* rather than *Pending*.
+- `Submissions::submit()` called from a console command or queue job failed reading the visitor's address; it now stores none.
+- A turned-down submission now says why under the form, instead of only re-enabling the button.
+
 ## 5.1.0 - 2026-10-08
 
 ### Added

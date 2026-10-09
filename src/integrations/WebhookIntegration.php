@@ -18,12 +18,7 @@ class WebhookIntegration extends AbstractIntegration
             return false;
         }
 
-        $data = [
-            'email' => $email,
-            'name' => $name,
-            'custom_fields' => $customFields,
-            'timestamp' => date('c'),
-        ];
+        $data = $this->payload($email, $name, $customFields);
 
         $target = Integrations::webhookTarget((string)$webhookUrl, $this->allowPrivateHosts);
 
@@ -73,6 +68,28 @@ class WebhookIntegration extends AbstractIntegration
         }
 
         return true;
+    }
+
+    /**
+     * What the webhook receives: `email`, `name`, `custom_fields`, `timestamp`, and `consent` when
+     * the submission carries a consent record.
+     *
+     * @return array<string, mixed>
+     */
+    public function payload(string $email, ?string $name = null, array $customFields = []): array
+    {
+        $data = [
+            'email' => $email,
+            'name' => $name,
+            'custom_fields' => $customFields,
+            'timestamp' => date('c'),
+        ];
+
+        if ($this->consent !== []) {
+            $data['consent'] = $this->consent;
+        }
+
+        return $data;
     }
 
     public function testConnection(): array

@@ -4,6 +4,7 @@ namespace justinholtweb\leads\controllers;
 
 use Craft;
 use craft\web\Controller;
+use justinholtweb\leads\helpers\ConsentBridge;
 use justinholtweb\leads\Plugin;
 use yii\web\Response;
 
@@ -21,7 +22,7 @@ class SettingsController extends Controller
     }
 
     /** The settings the form posts; nothing else can be set through it. */
-    public const EDITABLE = ['autoInjectScript', 'defaultButtonColor', 'defaultBackgroundColor', 'dataRetentionDays', 'enableHoneypot', 'rateLimitPerMinute', 'trackingPerMinute'];
+    public const EDITABLE = ['autoInjectScript', 'defaultButtonColor', 'defaultBackgroundColor', 'dataRetentionDays', 'enableHoneypot', 'rateLimitPerMinute', 'trackingPerMinute', 'confirmationExpiryHours', 'confirmationSubject', 'confirmationBody', 'confirmationTemplate', 'lockPurpose'];
 
     public function actionIndex(): Response
     {
@@ -29,6 +30,8 @@ class SettingsController extends Controller
             'settings' => Plugin::getInstance()->getSettings(),
             'plugin' => Plugin::getInstance(),
             'readOnly' => !self::canSave(),
+            'lockInstalled' => ConsentBridge::lockIsActive(),
+            'tossActive' => ConsentBridge::tossIsActive(),
         ]);
     }
 

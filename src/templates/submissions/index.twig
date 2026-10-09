@@ -18,6 +18,7 @@
                     <th>{{ 'Email'|t('leads') }}</th>
                     <th>{{ 'Name'|t('leads') }}</th>
                     <th>{{ 'Page URL'|t('leads') }}</th>
+                    <th>{{ 'Consent'|t('leads') }}</th>
                     <th>{{ 'Sync Status'|t('leads') }}</th>
                     <th>{{ 'Date'|t('leads') }}</th>
                     {% if currentUser.can('leads:deleteSubmissions') %}
@@ -32,8 +33,24 @@
                         <td>{{ submission.name ?? '—' }}</td>
                         <td>{{ submission.pageUrl }}</td>
                         <td>
-                            <span class="status {{ submission.syncStatus == 'synced' ? 'green' : (submission.syncStatus == 'failed' ? 'red' : 'orange') }}"></span>
-                            {{ submission.syncStatus|capitalize }}
+                            {% if submission.consentGiven is same as(null) %}
+                                <span class="light">—</span>
+                            {% elseif submission.consentGiven %}
+                                <span title="{{ submission.consentText }}">{{ 'Given'|t('leads') }}</span>
+                                {% if submission.confirmedAt %}<span class="light">· {{ 'confirmed'|t('leads') }}</span>{% endif %}
+                            {% else %}
+                                <span class="light">{{ 'Not given'|t('leads') }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set status = syncStatuses[submission.syncStatus] ?? null %}
+                            {% if submission.syncStatus == 'unconfirmed' and submission.confirmExpiresAt and submission.confirmExpiresAt <= nowUtc %}
+                                <span class="status gray"></span>{{ 'Link expired'|t('leads') }}
+                            {% elseif status %}
+                                <span class="status {{ status.color() }}"></span>{{ status.label()|t('leads') }}
+                            {% else %}
+                                {{ submission.syncStatus|capitalize }}
+                            {% endif %}
                         </td>
                         <td>{{ submission.dateCreated }}</td>
                         {% if currentUser.can('leads:deleteSubmissions') %}

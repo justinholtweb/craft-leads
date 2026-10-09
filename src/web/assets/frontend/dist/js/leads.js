@@ -385,6 +385,10 @@
             btn.disabled = true;
         }
 
+        var stale = form.querySelector('.leads-error');
+        if (stale) stale.textContent = '';
+
+        // An unticked consent box isn't in the form data at all, which the server reads as "no".
         var formData = new FormData(form);
         var data = {};
         formData.forEach(function (value, key) {
@@ -424,6 +428,7 @@
                     btn.classList.remove('leads-loading');
                     btn.disabled = false;
                 }
+                showError(form, result.error);
             }
         })
         .catch(function () {
@@ -432,6 +437,23 @@
                 btn.disabled = false;
             }
         });
+    }
+
+    /**
+     * Says why a submission was turned down — a required consent box left unticked, an address
+     * the server didn't accept. Text only: the message is set as textContent, never as HTML.
+     */
+    function showError(form, message) {
+        if (!message) return;
+
+        var error = form.querySelector('.leads-error');
+        if (!error) {
+            error = document.createElement('p');
+            error.className = 'leads-error';
+            error.setAttribute('role', 'alert');
+            form.appendChild(error);
+        }
+        error.textContent = String(message);
     }
 
     function trackEvent(popupId, type) {

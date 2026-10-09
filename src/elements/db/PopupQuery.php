@@ -69,6 +69,7 @@ class PopupQuery extends ElementQuery
             'leads_popups.targetingRules',
             'leads_popups.integrationProvider',
             'leads_popups.integrationSettings',
+            'leads_popups.consentSettings',
             'leads_popups.position',
             'leads_popups.popupStatus',
             'leads_popups.priority',
