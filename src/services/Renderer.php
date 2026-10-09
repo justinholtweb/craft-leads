@@ -7,6 +7,7 @@ use craft\base\Component;
 use craft\helpers\Json;
 use craft\web\View;
 use justinholtweb\leads\elements\Popup;
+use justinholtweb\leads\helpers\Targeting;
 
 class Renderer extends Component
 {
@@ -56,6 +57,7 @@ class Renderer extends Component
             'position' => $popup->position,
             'html' => $this->renderPopup($popup),
             'customCss' => $popup->customCss,
+            'targeting' => Targeting::forClient($popup->getTargeting()),
         ];
     }
 
@@ -67,9 +69,12 @@ class Renderer extends Component
      * rather than relying on the asset-bundle pipeline, so it works even on
      * templates that never call {{ head() }} / {{ endBody() }}.
      *
+     * With `$countVisits`, the script is emitted even when no popup belongs on this page, so the
+     * page views and visits that targeting rules count include this one.
+     *
      * @param Popup[] $popups
      */
-    public function getInjectHtml(array $popups): string
+    public function getInjectHtml(array $popups, bool $countVisits = false): string
     {
         $configs = [];
         foreach ($popups as $popup) {
@@ -80,7 +85,7 @@ class Renderer extends Component
             $configs[] = $this->getPopupConfig($popup);
         }
 
-        if (empty($configs)) {
+        if (empty($configs) && !$countVisits) {
             return '';
         }
 

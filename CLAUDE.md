@@ -17,8 +17,9 @@ Popup and lead generation plugin for Craft CMS 5. Creates modals, slide-ins, not
 - Integration abstraction: AbstractIntegration base class with provider implementations
 - Queue-based sync: SyncSubmissionJob pushed after form submission
 - Vanilla JS frontend: no jQuery, reads `window._leadsConfig` JSON
-- Auto-inject option via `EVENT_AFTER_RENDER_PAGE_TEMPLATE` or manual `{{ leadsPopups() }}`. Skips action requests and sandbox-CSP responses; spliced with `strripos`, never `preg_replace` (a `$10` in popup text is a back-reference)
+- Auto-inject option via `EVENT_AFTER_RENDER_PAGE_TEMPLATE` or manual `{{ leadsPopups() }}`. Skips action requests, sandbox-CSP responses and non-HTML `Content-Type`s; spliced with `strripos`, never `preg_replace` (a `$10` in popup text is a back-reference)
 - JSON written into a `<script>` goes through `Renderer::scriptJson()` (JSON_HEX_*)
+- Targeting (5.1.0): `helpers\Targeting` (pure, unit-tested) normalizes/validates the `targetingRules` JSON. Server applies only page patterns (`matchesPage`, include/exclude, path and path+query); device/frequency/visitor rules go to the browser via `forClient()` and are decided in `leads.js` (`window.LeadsTargeting`), state in localStorage `leads` (cookie fallback) + `leads_session` session cookie — cache-safe. `Popups::countsVisits()` makes the script load on every page when a page-view/visitor rule is live
 
 ## Security rules (5.0.6)
 - Settings are project config: `SettingsController::canSave()` = admin && allowAdminChanges; the save merges only `EDITABLE` over the current settings
@@ -31,7 +32,9 @@ Popup and lead generation plugin for Craft CMS 5. Creates modals, slide-ins, not
 ## Testing
 ```sh
 docker exec -w /sites/craft-leads ddev-phpstan-runner-web bash -c 'vendor/bin/phpunit && vendor/bin/phpstan analyse --memory-limit=1G && vendor/bin/ecs check'
-docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-leads/tests/integration/security.php   # 27, over HTTP; flips CRAFT_ALLOW_ADMIN_CHANGES briefly, self-cleaning
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-leads/tests/integration/security.php   # 28, over HTTP; flips CRAFT_ALLOW_ADMIN_CHANGES briefly, self-cleaning
+docker exec -w /var/www/html ddev-plugin-testing-web php /var/www/craft-leads/tests/integration/targeting.php  # editor → page, over HTTP, self-cleaning
+node --test tests/js/*.test.mjs   # the page script's targeting, in a VM with a fake browser
 ```
 
 ## Database Tables

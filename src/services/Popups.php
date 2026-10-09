@@ -6,9 +6,15 @@ use Craft;
 use craft\base\Component;
 use justinholtweb\leads\elements\Popup;
 use justinholtweb\leads\enums\PopupStatus;
+use justinholtweb\leads\helpers\Targeting;
 
 class Popups extends Component
 {
+    /**
+     * @var Popup[]|null Memoized for the request: the page render and the visit check both ask.
+     */
+    private ?array $activePopups = null;
+
     public function getById(int $id): ?Popup
     {
         return Popup::find()->id($id)->one();
@@ -59,40 +65,43 @@ class Popups extends Component
         return null;
     }
 
+    /**
+     * The active popups whose page rules match `$url`, in priority order. Device, frequency and
+     * visitor rules are left to the page script — see `helpers\Targeting`.
+     *
+     * @return Popup[]
+     */
     public function getActivePopupsForPage(string $url): array
     {
-        $popups = Popup::find()
+        return array_values(array_filter(
+            $this->getActivePopups(),
+            static fn(Popup $popup) => Targeting::matchesPage($popup->getTargeting(), $url),
+        ));
+    }
+
+    /**
+     * Whether any active popup needs the visitor's page views or visits counted — in which case the
+     * page script loads on every page, even one with no popup of its own, so the count is right.
+     */
+    public function countsVisits(): bool
+    {
+        foreach ($this->getActivePopups() as $popup) {
+            if (Targeting::countsVisits($popup->getTargeting())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return Popup[]
+     */
+    private function getActivePopups(): array
+    {
+        return $this->activePopups ??= Popup::find()
             ->popupStatus('active')
             ->orderBy('priority ASC')
             ->all();
-
-        return array_filter($popups, function(Popup $popup) use ($url) {
-            return $this->matchesTargetingRules($popup, $url);
-        });
-    }
-
-    private function matchesTargetingRules(Popup $popup, string $url): bool
-    {
-        $rules = $popup->getTargetingRulesArray();
-
-        if (empty($rules)) {
-            return true;
-        }
-
-        // Page URL matching
-        if (!empty($rules['pages'])) {
-            $matched = false;
-            foreach ($rules['pages'] as $pattern) {
-                if (fnmatch($pattern, $url)) {
-                    $matched = true;
-                    break;
-                }
-            }
-            if (!$matched) {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

@@ -10,6 +10,7 @@ use justinholtweb\leads\enums\PopupPosition;
 use justinholtweb\leads\enums\PopupStatus;
 use justinholtweb\leads\enums\PopupType;
 use justinholtweb\leads\enums\TriggerType;
+use justinholtweb\leads\helpers\Targeting;
 use justinholtweb\leads\Plugin;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
@@ -95,6 +96,25 @@ class PopupsController extends Controller
             ['label' => 'Minimal Inline', 'value' => 'minimal-inline'],
         ];
 
+        $deviceOptions = [
+            ['label' => Craft::t('leads', 'Desktop'), 'value' => 'desktop'],
+            ['label' => Craft::t('leads', 'Tablet'), 'value' => 'tablet'],
+            ['label' => Craft::t('leads', 'Mobile'), 'value' => 'mobile'],
+        ];
+
+        $frequencyOptions = [
+            ['label' => Craft::t('leads', 'On every page view'), 'value' => 'every'],
+            ['label' => Craft::t('leads', 'Once per session'), 'value' => 'session'],
+            ['label' => Craft::t('leads', 'Once per visitor'), 'value' => 'once'],
+            ['label' => Craft::t('leads', 'At most every few days'), 'value' => 'days'],
+        ];
+
+        $visitorOptions = [
+            ['label' => Craft::t('leads', 'All visitors'), 'value' => 'all'],
+            ['label' => Craft::t('leads', 'New visitors'), 'value' => 'new'],
+            ['label' => Craft::t('leads', 'Returning visitors'), 'value' => 'returning'],
+        ];
+
         return $this->renderTemplate('leads/popups/edit', [
             'popup' => $popup,
             'isNew' => $isNew,
@@ -105,6 +125,9 @@ class PopupsController extends Controller
             'statusOptions' => $statusOptions,
             'integrationOptions' => $integrationOptions,
             'templateOptions' => $templateOptions,
+            'deviceOptions' => $deviceOptions,
+            'frequencyOptions' => $frequencyOptions,
+            'visitorOptions' => $visitorOptions,
         ]);
     }
 
@@ -138,7 +161,9 @@ class PopupsController extends Controller
         $popup->backgroundImage = $request->getBodyParam('backgroundImage');
         $popup->customCss = $request->getBodyParam('customCss');
         $popup->formFields = $request->getBodyParam('formFields');
-        $popup->targetingRules = $request->getBodyParam('targetingRules');
+        // The editor posts pattern lists as one-per-line text and devices as checkboxes; store the
+        // normalized shape, so what the page script reads is exactly what validation looked at.
+        $popup->targetingRules = Targeting::normalize($request->getBodyParam('targetingRules', []));
         $popup->integrationProvider = $request->getBodyParam('integrationProvider') ?: null;
         // Only the settings the chosen provider takes; the form carries every provider's fields.
         $integrationSettings = (array)$request->getBodyParam('integrationSettings', []);

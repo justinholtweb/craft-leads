@@ -248,7 +248,122 @@
 
         <h2>{{ 'Targeting Rules'|t('leads') }}</h2>
 
-        <p class="light">{{ 'Targeting rules will be configurable in a future update. Currently all active popups show on all pages.'|t('leads') }}</p>
+        {% set targeting = popup.getTargeting() %}
+        {{ forms.errorList(popup.getErrors('targetingRules')) }}
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.textareaField({
+                    label: 'Show on'|t('leads'),
+                    instructions: 'URL patterns, one per line, such as `/blog/*`. `*` matches anything. Leave blank for every page.'|t('leads'),
+                    id: 'targetingPages',
+                    name: 'targetingRules[pages]',
+                    value: targeting.pages|join("\n"),
+                    rows: 4,
+                    class: 'code',
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.textareaField({
+                    label: 'Don’t show on'|t('leads'),
+                    instructions: 'URL patterns, one per line. These win over “Show on”.'|t('leads'),
+                    id: 'targetingExcludePages',
+                    name: 'targetingRules[excludePages]',
+                    value: targeting.excludePages|join("\n"),
+                    rows: 4,
+                    class: 'code',
+                }) }}
+            </div>
+        </div>
+
+        {{ forms.checkboxSelectField({
+            label: 'Devices'|t('leads'),
+            instructions: 'Decided in the visitor’s browser, so it holds on cached pages.'|t('leads'),
+            id: 'targetingDevices',
+            name: 'targetingRules[devices]',
+            options: deviceOptions,
+            values: targeting.devices ?: deviceOptions|column('value'),
+        }) }}
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.selectField({
+                    label: 'How often'|t('leads'),
+                    instructions: 'How often one visitor may see this popup.'|t('leads'),
+                    id: 'targetingFrequency',
+                    name: 'targetingRules[frequency]',
+                    value: targeting.frequency,
+                    options: frequencyOptions,
+                    toggle: true,
+                    targetPrefix: 'leads-frequency-',
+                }) }}
+            </div>
+            <div class="flex-grow">
+                <div id="leads-frequency-days"{% if targeting.frequency != 'days' %} class="hidden"{% endif %}>
+                    {{ forms.textField({
+                        label: 'Days between showings'|t('leads'),
+                        id: 'targetingFrequencyDays',
+                        name: 'targetingRules[frequencyDays]',
+                        value: targeting.frequencyDays,
+                        type: 'number',
+                        min: 1,
+                        max: 3650,
+                        size: 5,
+                    }) }}
+                </div>
+            </div>
+        </div>
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.selectField({
+                    label: 'Visitors'|t('leads'),
+                    instructions: 'A new visitor is on their first visit; a returning one has been before.'|t('leads'),
+                    id: 'targetingVisitor',
+                    name: 'targetingRules[visitor]',
+                    value: targeting.visitor,
+                    options: visitorOptions,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.textField({
+                    label: 'After page views'|t('leads'),
+                    instructions: 'Show only from the visitor’s Nth page view on the site. 0 for straight away.'|t('leads'),
+                    id: 'targetingMinPageViews',
+                    name: 'targetingRules[minPageViews]',
+                    value: targeting.minPageViews,
+                    type: 'number',
+                    min: 0,
+                    max: 1000,
+                    size: 5,
+                }) }}
+            </div>
+        </div>
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.textField({
+                    label: 'Days hidden after closing'|t('leads'),
+                    instructions: 'How long a visitor who closes the popup goes without seeing it. 0 to show it again on the next page.'|t('leads'),
+                    id: 'targetingDismissDays',
+                    name: 'targetingRules[dismissDays]',
+                    value: targeting.dismissDays,
+                    type: 'number',
+                    min: 0,
+                    max: 3650,
+                    size: 5,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.lightswitchField({
+                    label: 'Hide after signing up'|t('leads'),
+                    instructions: 'Never show it again to a visitor who has submitted it.'|t('leads'),
+                    id: 'targetingHideAfterConversion',
+                    name: 'targetingRules[hideAfterConversion]',
+                    on: targeting.hideAfterConversion,
+                }) }}
+            </div>
+        </div>
     </div>
 
     {% if not isNew %}

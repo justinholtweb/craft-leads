@@ -242,6 +242,13 @@ class Plugin extends BasePlugin
                     }
                 }
 
+                // Nor anything that isn't HTML: a template serving JSON, XML, RSS or a sitemap with
+                // `{% header %}` would otherwise end in a <link> and two <script>s, and stop parsing.
+                $type = (string)Craft::$app->getResponse()->getHeaders()->get('Content-Type', '');
+                if ($type !== '' && stripos($type, 'text/html') === false) {
+                    return;
+                }
+
                 if ($event->templateMode !== View::TEMPLATE_MODE_SITE) {
                     return;
                 }
@@ -251,11 +258,7 @@ class Plugin extends BasePlugin
                 }
 
                 $popups = $this->popups->getActivePopupsForPage($request->getUrl());
-                if (empty($popups)) {
-                    return;
-                }
-
-                $html = $this->renderer->getInjectHtml($popups);
+                $html = $this->renderer->getInjectHtml($popups, $this->popups->countsVisits());
                 if ($html === '') {
                     return;
                 }

@@ -289,8 +289,10 @@ echo "\nThe injected script\n";
 $page = "leads-security-$run";
 file_put_contents("$templates/$page.twig", "<!doctype html><html><body><p>Page</p></body></html>");
 file_put_contents("$templates/$page-sandbox.twig", "{% header \"Content-Security-Policy: sandbox allow-scripts\" %}<!doctype html><html><body><p>Embed</p></body></html>");
+file_put_contents("$templates/$page-json.twig", "{% header \"Content-Type: application/json\" %}{\"ok\":true}");
 $cleanup['templates'][] = "$templates/$page.twig";
 $cleanup['templates'][] = "$templates/$page-sandbox.twig";
+$cleanup['templates'][] = "$templates/$page-json.twig";
 
 $body = (string)$anon->get("index.php?p=$page")->getBody();
 
@@ -310,6 +312,12 @@ check('a page served with a sandbox CSP gets nothing', function() use ($anon, $p
     $body = (string)$anon->get("index.php?p=$page-sandbox")->getBody();
 
     return str_contains($body, 'Embed') && !str_contains($body, '_leadsConfig') ?: 'injected';
+});
+
+check('nor does a template serving JSON', function() use ($anon, $page) {
+    $body = (string)$anon->get("index.php?p=$page-json")->getBody();
+
+    return $body === '{"ok":true}' ?: 'body: ' . substr($body, 0, 80);
 });
 
 echo "\nWhere an integration may send a lead\n";

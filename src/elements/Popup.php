@@ -12,6 +12,7 @@ use craft\helpers\UrlHelper;
 use justinholtweb\leads\elements\db\PopupQuery;
 use justinholtweb\leads\enums\PopupStatus;
 use justinholtweb\leads\enums\PopupType;
+use justinholtweb\leads\helpers\Targeting;
 use justinholtweb\leads\records\PopupRecord;
 use yii\base\InvalidConfigException;
 
@@ -231,6 +232,7 @@ class Popup extends Element
         $rules[] = [['buttonColor', 'backgroundColor'], 'string', 'max' => 20];
         $rules[] = [['priority'], 'integer'];
         $rules[] = [['integrationSettings'], 'validateIntegrationSettings', 'skipOnEmpty' => false];
+        $rules[] = [['targetingRules'], 'validateTargetingRules', 'skipOnEmpty' => false];
 
         return $rules;
     }
@@ -249,6 +251,27 @@ class Popup extends Element
         foreach (\justinholtweb\leads\Plugin::getInstance()->integrations->problems($this->integrationProvider, $this->getIntegrationSettingsArray()) as $problem) {
             $this->addError($attribute, $problem);
         }
+    }
+
+    /**
+     * Refuses targeting rules the page script couldn't follow — no device ticked, a frequency it
+     * doesn't know, a negative page-view count — so the popup doesn't quietly show to everyone.
+     */
+    public function validateTargetingRules(string $attribute): void
+    {
+        foreach (Targeting::problems($this->getTargeting()) as $problem) {
+            $this->addError($attribute, Craft::t('leads', $problem));
+        }
+    }
+
+    /**
+     * The popup's targeting rules with every key set — the defaults for anything it doesn't say.
+     *
+     * @return array<string, mixed>
+     */
+    public function getTargeting(): array
+    {
+        return Targeting::normalize($this->getTargetingRulesArray());
     }
 
     public function getFormFieldsArray(): array

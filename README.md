@@ -23,7 +23,7 @@ php craft plugin/install leads
 | Templates | 8 built-in designs (clean, bold, minimal) |
 | Integrations | Mailchimp, ConvertKit, webhook |
 | Analytics | Impressions, conversions, conversion rates |
-| Targeting | Page URLs, device type, visitor frequency |
+| Targeting | Page URLs, device type, visitor frequency, new/returning visitors, page-view minimums |
 | Spam protection | Honeypot field, rate limiting |
 | Queue sync | Background sync to email providers via Craft queue |
 
@@ -104,6 +104,40 @@ Access popup data via the `craft.leads` variable:
 | `scroll` | Percentage (e.g., `50`) | Show when user scrolls past N% |
 | `exit` | — | Show on exit intent (mouse leaves viewport) |
 | `click` | CSS selector (e.g., `.cta-btn`) | Show when element is clicked |
+
+### Targeting
+
+Each popup's **Targeting Rules** are set in its editor:
+
+| Rule | Options |
+|---|---|
+| Show on / Don't show on | URL patterns, one per line — `*` matches anything (`/blog/*`). Blank "Show on" means every page; "Don't show on" wins. A pattern is matched against the path and against the path with its query string. |
+| Devices | Desktop, tablet, mobile |
+| How often | On every page view, once per session, once per visitor, at most every N days |
+| Visitors | All, new (first visit), returning |
+| After page views | Show only from the visitor's Nth page view on the site (`0` = straight away) |
+| Days hidden after closing | How long a visitor who closes it goes without seeing it (default 1; `0` = no pause) |
+| Hide after signing up | Never show it again once the visitor has submitted it (default on) |
+
+Page rules are applied on the server — the URL is part of every full-page cache key. Everything about the visitor is decided by the page script in their browser: the device from User-Agent Client Hints or the user agent, and what they've seen from `localStorage` (key `leads`, or a `leads` cookie where storage is blocked) plus a `leads_session` session cookie. So a page served from Blitz, a CDN or any other full-page cache shows each visitor the right popups. While a live popup uses a page-view or visitor rule, the script loads on every front-end page so those pages count.
+
+Inline forms (`leadsInline()`) follow the page, device, visitor and page-view rules and are hidden after a sign-up; "How often" and closing don't apply to them.
+
+Rules can be set in code too, as the `targetingRules` attribute:
+
+```php
+$popup->targetingRules = [
+    'pages' => ['/blog/*'],
+    'excludePages' => ['/blog/archive/*'],
+    'devices' => ['desktop', 'tablet'],  // empty = every device
+    'frequency' => 'days',               // every | session | once | days
+    'frequencyDays' => 7,
+    'minPageViews' => 2,
+    'visitor' => 'returning',            // all | new | returning
+    'dismissDays' => 1,
+    'hideAfterConversion' => true,
+];
+```
 
 ### Built-in Templates
 

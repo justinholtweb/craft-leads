@@ -3,6 +3,8 @@
 namespace justinholtweb\leads\twig;
 
 use Craft;
+use craft\helpers\Html;
+use justinholtweb\leads\helpers\Targeting;
 use justinholtweb\leads\Plugin;
 use justinholtweb\leads\services\Renderer;
 use justinholtweb\leads\web\assets\frontend\FrontendAsset;
@@ -27,11 +29,6 @@ class LeadsTwigExtension extends AbstractExtension
 
         $currentUrl = Craft::$app->getRequest()->getUrl();
         $popups = Plugin::getInstance()->popups->getActivePopupsForPage($currentUrl);
-
-        if (empty($popups)) {
-            return '';
-        }
-
         $renderer = Plugin::getInstance()->renderer;
         $configs = [];
 
@@ -42,7 +39,9 @@ class LeadsTwigExtension extends AbstractExtension
             $configs[] = $renderer->getPopupConfig($popup);
         }
 
-        if (empty($configs)) {
+        // Even with nothing to show here, load the script when a popup's rules count page views or
+        // visits — otherwise this page wouldn't count towards them.
+        if (empty($configs) && !Plugin::getInstance()->popups->countsVisits()) {
             return '';
         }
 
@@ -51,7 +50,8 @@ class LeadsTwigExtension extends AbstractExtension
 
         $configJson = Renderer::scriptJson($configs);
 
-        return '<script>window._leadsConfig = ' . $configJson . ';</script>';
+        // Added to, not assigned: a leadsInline() earlier in the page has already pushed its config.
+        return '<script>window._leadsConfig = (window._leadsConfig || []).concat(' . $configJson . ');</script>';
     }
 
     public function leadsInline(?string $handle = null): string
@@ -70,7 +70,7 @@ class LeadsTwigExtension extends AbstractExtension
 
         $popup = $query->one();
 
-        if (!$popup) {
+        if (!$popup || !Targeting::matchesPage($popup->getTargeting(), Craft::$app->getRequest()->getUrl())) {
             return '';
         }
 
@@ -80,9 +80,9 @@ class LeadsTwigExtension extends AbstractExtension
         $renderer = Plugin::getInstance()->renderer;
         $config = $renderer->getPopupConfig($popup);
 
-        $configJson = Renderer::scriptJson([$config]);
-
-        return $renderer->renderPopup($popup)
+        // Hidden until the page script has checked the device and visitor rules — and it's the
+        // script that sends the form, so without it there is nothing to show.
+        return Html::tag('div', $renderer->renderPopup($popup), ['data-leads-inline' => $popup->id, 'hidden' => true])
             . '<script>window._leadsConfig = window._leadsConfig || []; window._leadsConfig.push(' . Renderer::scriptJson($config) . ');</script>';
     }
 }

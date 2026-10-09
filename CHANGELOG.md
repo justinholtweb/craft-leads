@@ -1,5 +1,29 @@
 # Changelog
 
+## 5.1.0 - 2026-10-08
+
+### Added
+
+- **Targeting rules, in the popup editor.** The editor used to say targeting would come "in a future update", and only a page list set in code was honoured. Each popup now has:
+  - **Pages** — "Show on" and "Don't show on" URL patterns, one per line (`/blog/*`). Excludes win. A pattern matches the path, or the path with its query string.
+  - **Devices** — desktop, tablet and mobile.
+  - **How often** — on every page view, once per session, once per visitor, or at most every N days.
+  - **Visitors** — all, new (on their first visit) or returning.
+  - **After page views** — show only from the visitor's Nth page view on the site.
+  - **Days hidden after closing**, and **Hide after signing up**.
+- Device, frequency and visitor rules are decided by the page script in the visitor's browser, with what it needs kept in `localStorage` (a cookie where storage is blocked) and a session cookie, so they hold on pages served from a full-page cache. Only the page rules are applied on the server.
+- While any live popup counts page views or visits, the page script loads on every front-end page, so pages without a popup count too.
+
+### Changed
+
+- A visitor who signs up through a popup no longer sees it again at all, rather than for 30 days. Turn off **Hide after signing up** to have a sign-up count as a close instead.
+- Closing a popup still hides it for a day by default; that's now the popup's **Days hidden after closing**.
+- Inline forms rendered with `leadsInline()` follow their page, device and visitor rules, are hidden once the visitor has signed up, and now submit through the page script like the other popup types. `leadsPopups()` adds to `window._leadsConfig` instead of replacing it, so an inline form earlier in the page keeps its config.
+
+### Fixed
+
+- Auto-injection no longer touches anything that isn't HTML — a template serving JSON, XML, RSS or a sitemap with `{% header %}` ended with a `<link>` and two `<script>` tags appended, and stopped parsing.
+
 ## 5.0.6 - 2026-10-04
 
 > {warning} Leads settings can now only be changed by an admin, on an environment where `allowAdminChanges` is on — "Manage settings" alone shows them read-only. Webhook integrations now refuse private, loopback and link-local addresses; set `allowPrivateWebhookHosts` in `config/leads.php` if yours posts to an internal host. If the site is behind a proxy or CDN, set Craft's `trustedHosts` so the rate limits see visitors' addresses rather than the proxy's.
