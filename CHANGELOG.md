@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 5.2.0 - 2026-10-09
 ### Added
 
 - **Consent checkbox.** A popup can show a consent checkbox with your own wording (`[label](/url)` makes a link), optional or required. A required box is enforced by the server as well as the browser. Each submission stores whether it was ticked, the wording exactly as shown, a SHA-256 version of that wording and the time, so rewording a popup never changes what an earlier sign-up agreed to. The Submissions screen and the CSV export show it.
