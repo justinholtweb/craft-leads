@@ -28,6 +28,7 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
             const shown = [];
             const events = [];
             const timers = [];
+            const listeners = [];
             const element = (tag) => {
                 const el = {
                     tag, children: [], parentNode: null, classList: { add() {}, remove() {} }, hidden: false,
@@ -59,7 +60,8 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
                 localStorage: storage
                     ? { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) }
                     : { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } },
-                addEventListener() {},
+                scrollY: 0,
+                addEventListener: (type, fn) => listeners.push({ type, fn }),
                 location: { href: 'https://example.com/' },
             };
             const context = {
@@ -70,13 +72,19 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
             vm.runInNewContext(source, context);
             timers.splice(0).forEach((fn) => fn());
 
-            return { shown, events, targeting: window.LeadsTargeting };
+            /** Scroll the page to `y` and fire the window's scroll listeners. */
+            const scrollTo = (y) => {
+                window.scrollY = y;
+                listeners.filter((l) => l.type === 'scroll').forEach((l) => l.fn());
+            };
+
+            return { shown, events, scrollTo, targeting: window.LeadsTargeting };
         },
     };
 }
 
 const popup = (id, targeting = {}) => ({ id, type: 'modal', trigger: 'time', triggerValue: '1', html: `popup-${id}`, targeting });
-const { deviceType, allows } = browser().load().targeting;
+const { deviceType, allows, exitScroll } = browser().load().targeting;
 
 test('device type', () => {
     const cases = [
@@ -181,4 +189,43 @@ test('with localStorage blocked, state lives in a cookie', () => {
 test('an impression is tracked for each showing', () => {
     const { events } = browser().load([popup(14)]);
     assert.deepEqual(events, [{ popupId: 14, type: 'impression' }]);
+});
+
+test('exit intent without a mouse: a quick scroll back up, after reading down', () => {
+    let flicked = exitScroll();
+    assert.equal(flicked(0, 0), false);
+    assert.equal(flicked(200, 1000), false);
+    assert.equal(flicked(60, 1100), false, 'not read far enough yet');
+
+    flicked = exitScroll();
+    assert.equal(flicked(800, 0), false);
+    assert.equal(flicked(780, 2000), false, 'drifting up');
+    assert.equal(flicked(700, 2400), false, '80px slowly');
+    assert.equal(flicked(640, 2500), false, 'still under 120px in the last 250ms');
+    assert.equal(flicked(560, 2600), true, '140px in 200ms');
+
+    flicked = exitScroll();
+    flicked(900, 0);
+    assert.equal(flicked(750, 1000), false, 'a jump between distant samples is not a flick');
+});
+
+const exitPopup = (id) => ({ id, type: 'modal', trigger: 'exit', html: `popup-${id}`, targeting: {} });
+
+test('exit intent fires on a phone when the visitor flicks back up', () => {
+    const page = browser({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148' }).load([exitPopup(15)]);
+    page.scrollTo(400);
+    page.scrollTo(900);
+    assert.deepEqual(page.shown, []);
+    page.scrollTo(700);
+    assert.deepEqual(page.shown, ['popup-15']);
+    page.scrollTo(900);
+    page.scrollTo(500);
+    assert.deepEqual(page.shown, ['popup-15'], 'once');
+});
+
+test('on a desktop, scrolling up is not exit intent', () => {
+    const page = browser().load([exitPopup(16)]);
+    page.scrollTo(900);
+    page.scrollTo(500);
+    assert.deepEqual(page.shown, []);
 });

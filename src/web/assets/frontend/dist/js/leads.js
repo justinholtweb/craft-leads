@@ -75,7 +75,33 @@
         }
     }
 
-    window.LeadsTargeting = { deviceType: deviceType, allows: allows };
+    /**
+     * Exit intent where there's no mouse to leave the window: a quick scroll back up, once the
+     * visitor has read some way down — on a phone that's the reach for the address bar or back.
+     * Returns a function fed each scroll position (px) and time (ms); true when it should fire.
+     */
+    var EXIT_MIN_DEPTH = 300;   // px read down the page before an upward flick counts
+    var EXIT_FLICK = 120;       // px climbed…
+    var EXIT_WINDOW = 250;      // …within this many ms
+
+    function exitScroll() {
+        var deepest = 0;
+        var recent = [];
+
+        return function (y, now) {
+            if (y > deepest) deepest = y;
+            recent.push({ y: y, t: now });
+            while (recent.length && now - recent[0].t > EXIT_WINDOW) recent.shift();
+            if (deepest < EXIT_MIN_DEPTH) return false;
+
+            var high = y;
+            for (var i = 0; i < recent.length; i++) if (recent[i].y > high) high = recent[i].y;
+
+            return high - y >= EXIT_FLICK;
+        };
+    }
+
+    window.LeadsTargeting = { deviceType: deviceType, allows: allows, exitScroll: exitScroll };
 
     // ---- Visitor state -----------------------------------------------------------------------
 
@@ -250,13 +276,21 @@
 
             case 'exit':
                 var exitTriggered = false;
-                document.addEventListener('mouseleave', function (e) {
+                var exitNow = function () {
                     if (exitTriggered) return;
-                    if (e.clientY <= 0) {
-                        exitTriggered = true;
-                        showPopup(popup, config);
-                    }
+                    exitTriggered = true;
+                    showPopup(popup, config);
+                };
+                document.addEventListener('mouseleave', function (e) {
+                    if (e.clientY <= 0) exitNow();
                 });
+                // Phones and tablets have no mouse to leave the window.
+                if (currentDevice() !== 'desktop') {
+                    var flicked = exitScroll();
+                    window.addEventListener('scroll', function () {
+                        if (!exitTriggered && flicked(window.scrollY, Date.now())) exitNow();
+                    }, { passive: true });
+                }
                 break;
 
             case 'click':

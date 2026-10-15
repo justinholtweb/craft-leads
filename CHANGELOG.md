@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Exit intent never fired on phones or tablets.** It only listened for the mouse leaving the window. On touch devices a quick scroll back up (120px within a quarter of a second, once the visitor has read 300px down the page) now counts as exit intent. Desktops are unchanged. ([#6](https://github.com/justinholtweb/craft-leads/issues/6))
+
 ## 5.2.0 - 2026-10-09
 ### Added
 

@@ -110,7 +110,7 @@ Access popup data via the `craft.leads` variable:
 |---|---|---|
 | `time` | Seconds (e.g., `3`) | Show after N seconds |
 | `scroll` | Percentage (e.g., `50`) | Show when user scrolls past N% |
-| `exit` | — | Show on exit intent (mouse leaves viewport) |
+| `exit` | — | Show on exit intent: the mouse leaves the top of the window, or on phones and tablets, a quick scroll back up after reading at least 300px down |
 | `click` | CSS selector (e.g., `.cta-btn`) | Show when element is clicked |
 
 ### Targeting
