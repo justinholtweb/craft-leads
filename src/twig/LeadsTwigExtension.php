@@ -68,7 +68,14 @@ class LeadsTwigExtension extends AbstractExtension
             $query->slug($handle);
         }
 
-        $popup = $query->one();
+        // The first one within its dates.
+        $popup = null;
+        foreach ($query->all() as $candidate) {
+            if (Targeting::inSchedule($candidate->getTargeting(), time())) {
+                $popup = $candidate;
+                break;
+            }
+        }
 
         if (!$popup || !Targeting::matchesPage($popup->getTargeting(), Craft::$app->getRequest()->getUrl())) {
             return '';

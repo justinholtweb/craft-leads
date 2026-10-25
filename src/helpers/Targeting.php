@@ -23,6 +23,12 @@ namespace justinholtweb\leads\helpers;
  *     visitor             string    all|new|returning
  *     hideAfterConversion bool      never show again once the visitor has signed up
  *     dismissDays         int       days hidden after the visitor closes it; 0 = no pause
+ *     sources             string[]  traffic sources, any of which will do; none = every visitor.
+ *                                   `utm_campaign=spring` (a UTM parameter, `*` wildcards in the
+ *                                   value) or a referring host (`google.com`, which covers its
+ *                                   subdomains; `*` wildcards allowed)
+ *     startDate           ?string   shown from this moment, ISO 8601 UTC (`2026-11-27T05:00:00Z`)
+ *     endDate             ?string   …until this one
  */
 abstract class Targeting
 {
@@ -33,6 +39,12 @@ abstract class Targeting
     /** How many patterns a list may hold, and how long each may be. */
     public const MAX_PATTERNS = 100;
     public const MAX_PATTERN_LENGTH = 255;
+
+    /** How many traffic sources a popup may name. */
+    public const MAX_SOURCES = 50;
+
+    /** The stored form of a schedule date. */
+    public const DATE_FORMAT = 'Y-m-d\\TH:i:s\\Z';
 
     /** The behaviour a popup with no rules has — and every popup had before 5.1.0, bar conversions. */
     public const DEFAULTS = [
@@ -45,6 +57,9 @@ abstract class Targeting
         'visitor' => 'all',
         'hideAfterConversion' => true,
         'dismissDays' => 1,
+        'sources' => [],
+        'startDate' => null,
+        'endDate' => null,
     ];
 
     /**
@@ -92,6 +107,21 @@ abstract class Targeting
 
         if (array_key_exists('hideAfterConversion', $rules)) {
             $out['hideAfterConversion'] = filter_var($rules['hideAfterConversion'], FILTER_VALIDATE_BOOLEAN);
+        }
+
+        // Hosts and parameter names are case-insensitive; store them the way they're compared.
+        $out['sources'] = array_values(array_unique(array_map(static function(string $source): string {
+            $eq = strpos($source, '=');
+            return $eq === false ? strtolower($source) : strtolower(substr($source, 0, $eq)) . substr($source, $eq);
+        }, self::patterns($rules['sources'] ?? []))));
+
+        foreach (['startDate', 'endDate'] as $key) {
+            $value = $rules[$key] ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                // A date the editor's controller couldn't read is kept, so `problems()` can name it.
+                $time = self::time($value);
+                $out[$key] = $time === null ? trim($value) : gmdate(self::DATE_FORMAT, $time);
+            }
         }
 
         return $out;
@@ -143,6 +173,28 @@ abstract class Targeting
             $problems[] = 'The days hidden after closing must be a whole number from 0 to 3650.';
         }
 
+        if (count($rules['sources']) > self::MAX_SOURCES) {
+            $problems[] = sprintf('“Traffic source” takes at most %d lines.', self::MAX_SOURCES);
+        }
+        foreach ($rules['sources'] as $source) {
+            if (!self::isSource($source)) {
+                $problems[] = sprintf('“%s” isn’t a traffic source. Write a UTM parameter such as `utm_source=newsletter`, or a referring site such as `google.com`.', mb_substr($source, 0, 80));
+                break;
+            }
+        }
+
+        $start = $rules['startDate'] === null ? null : self::time($rules['startDate']);
+        $end = $rules['endDate'] === null ? null : self::time($rules['endDate']);
+        if ($rules['startDate'] !== null && $start === null) {
+            $problems[] = 'The start date isn’t a date.';
+        }
+        if ($rules['endDate'] !== null && $end === null) {
+            $problems[] = 'The end date isn’t a date.';
+        }
+        if ($start !== null && $end !== null && $end <= $start) {
+            $problems[] = 'The end date has to be after the start date.';
+        }
+
         return $problems;
     }
 
@@ -180,6 +232,39 @@ abstract class Targeting
     }
 
     /**
+     * Whether the popup's start and end dates allow it at `$now` (a Unix timestamp). The server
+     * leaves out a popup outside its dates; the page script checks again, so a page cached while
+     * a popup was running stops showing it when it ends.
+     *
+     * @param array<string, mixed> $rules
+     */
+    public static function inSchedule(array $rules, int $now): bool
+    {
+        $start = $rules['startDate'] === null ? null : self::time($rules['startDate']);
+        $end = $rules['endDate'] === null ? null : self::time($rules['endDate']);
+
+        return ($start === null || $now >= $start) && ($end === null || $now < $end);
+    }
+
+    /**
+     * Whether a popup's schedule is still to come or over — for the popup index.
+     *
+     * @param array<string, mixed> $rules
+     * @return 'scheduled'|'ended'|null
+     */
+    public static function scheduleState(array $rules, int $now): ?string
+    {
+        $start = $rules['startDate'] === null ? null : self::time($rules['startDate']);
+        $end = $rules['endDate'] === null ? null : self::time($rules['endDate']);
+
+        if ($end !== null && $now >= $end) {
+            return 'ended';
+        }
+
+        return $start !== null && $now < $start ? 'scheduled' : null;
+    }
+
+    /**
      * The rules the page script needs — everything but the page patterns, which the server has
      * already applied.
      *
@@ -196,18 +281,47 @@ abstract class Targeting
             'visitor' => $rules['visitor'],
             'hideAfterConversion' => (bool)$rules['hideAfterConversion'],
             'dismissDays' => (int)$rules['dismissDays'],
+            'sources' => array_values($rules['sources']),
+            // Milliseconds, as the page script's clock counts.
+            'start' => $rules['startDate'] === null ? null : self::time($rules['startDate']) * 1000,
+            'end' => $rules['endDate'] === null ? null : self::time($rules['endDate']) * 1000,
         ];
     }
 
     /**
-     * Whether these rules need the visitor's page views and visits counted — which happens on
-     * every page that loads the script, popup or not.
+     * Whether these rules need the page script on every page, popup or not: to count the
+     * visitor's page views and visits, or to note where the visit came from on the page it
+     * started on.
      *
      * @param array<string, mixed> $rules
      */
     public static function countsVisits(array $rules): bool
     {
-        return $rules['minPageViews'] > 0 || $rules['visitor'] !== 'all';
+        return $rules['minPageViews'] > 0 || $rules['visitor'] !== 'all' || $rules['sources'] !== [];
+    }
+
+    /**
+     * `utm_name=value` or a host pattern. Values may hold anything but line breaks; `*` is the
+     * only wildcard the page script honours.
+     */
+    private static function isSource(string $source): bool
+    {
+        if (str_contains($source, '=')) {
+            return (bool)preg_match('/^utm_[a-z0-9_]{1,40}=[^\r\n]{1,200}$/', $source);
+        }
+
+        return strlen($source) <= 253 && (bool)preg_match('/^[a-z0-9*-]+(\.[a-z0-9*-]+)+$/', $source);
+    }
+
+    /** A Unix timestamp from an ISO 8601 date, or null when it isn't one. */
+    private static function time(string $value): ?int
+    {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/', trim($value))) {
+            return null;
+        }
+        $time = strtotime(trim($value));
+
+        return $time === false ? null : $time;
     }
 
     /**

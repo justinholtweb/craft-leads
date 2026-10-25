@@ -19,11 +19,12 @@ php craft plugin/install leads
 | Feature | Description |
 |---|---|
 | Popup types | Modal, slide-in, notification bar, inline form |
-| Triggers | Time delay, scroll percentage, exit intent, click |
+| Triggers | Time delay, scroll percentage, exit intent (phones too), click, idle, element in view |
 | Templates | 8 built-in designs (clean, bold, minimal) |
 | Integrations | Mailchimp, ConvertKit, webhook |
 | Analytics | Impressions, conversions, conversion rates |
-| Targeting | Page URLs, device type, visitor frequency, new/returning visitors, page-view minimums |
+| Targeting | Page URLs, start and end dates, device type, traffic source (UTM or referrer), visitor frequency, new/returning visitors, page-view minimums |
+| Cookie banners | Modals and slide-ins wait while the site's cookie banner is on screen |
 | Consent | Optional or required consent checkbox, with the wording stored on each submission |
 | Double opt-in | Leads emails a confirmation link, or Mailchimp/ConvertKit confirm themselves |
 | Spam protection | Honeypot field, rate limiting |
@@ -44,6 +45,8 @@ return [
     'enableHoneypot' => true,
     'rateLimitPerMinute' => 5,
     'trackingPerMinute' => 60,
+    // Cookie banners to wait for, one CSS selector per line ('' = never wait). See "Cookie banners".
+    'consentBannerSelectors' => "[data-toss-consent-root]\n#CybotCookiebotDialog\n…",
     // Double opt-in (see "Consent & Double Opt-in")
     'confirmationExpiryHours' => 48,
     'confirmationSubject' => 'Please confirm your subscription to {siteName}',
@@ -112,6 +115,8 @@ Access popup data via the `craft.leads` variable:
 | `scroll` | Percentage (e.g., `50`) | Show when user scrolls past N% |
 | `exit` | — | Show on exit intent: the mouse leaves the top of the window, or on phones and tablets, a quick scroll back up after reading at least 300px down |
 | `click` | CSS selector (e.g., `.cta-btn`) | Show when element is clicked |
+| `idle` | Seconds (e.g., `30`, the default) | Show after N seconds with no mouse, keyboard, scroll or touch input |
+| `view` | CSS selector (e.g., `#pricing`) | Show when a matching element scrolls a fifth of the way up the screen |
 
 ### Targeting
 
@@ -120,14 +125,20 @@ Each popup's **Targeting Rules** are set in its editor:
 | Rule | Options |
 |---|---|
 | Show on / Don't show on | URL patterns, one per line — `*` matches anything (`/blog/*`). Blank "Show on" means every page; "Don't show on" wins. A pattern is matched against the path and against the path with its query string. |
+| Start / End | When the popup switches itself on and off. Blank = straight away / no end. The popup index marks an active popup *(scheduled)* or *(ended)* |
 | Devices | Desktop, tablet, mobile |
 | How often | On every page view, once per session, once per visitor, at most every N days |
 | Visitors | All, new (first visit), returning |
 | After page views | Show only from the visitor's Nth page view on the site (`0` = straight away) |
 | Days hidden after closing | How long a visitor who closes it goes without seeing it (default 1; `0` = no pause) |
 | Hide after signing up | Never show it again once the visitor has submitted it (default on) |
+| Traffic source | One per line, any of which will do: a UTM parameter (`utm_campaign=spring-sale`) or a referring site (`google.com`, which covers its subdomains). `*` matches anything. Blank = every visitor |
 
-Page rules are applied on the server — the URL is part of every full-page cache key. Everything about the visitor is decided by the page script in their browser: the device from User-Agent Client Hints or the user agent, and what they've seen from `localStorage` (key `leads`, or a `leads` cookie where storage is blocked) plus a `leads_session` session cookie. So a page served from Blitz, a CDN or any other full-page cache shows each visitor the right popups. While a live popup uses a page-view or visitor rule, the script loads on every front-end page so those pages count.
+Page rules are applied on the server — the URL is part of every full-page cache key. Everything about the visitor is decided by the page script in their browser: the device from User-Agent Client Hints or the user agent, and what they've seen from `localStorage` (key `leads`, or a `leads` cookie where storage is blocked) plus a `leads_session` session cookie. So a page served from Blitz, a CDN or any other full-page cache shows each visitor the right popups. While a live popup uses a page-view, visitor or traffic-source rule, the script loads on every front-end page so those pages count.
+
+**Dates** are checked on the server and again in the browser, so a cached page stops showing a popup when it ends. A page cached *before* a popup starts won't carry it until the page is cached again — have your cache refresh on a schedule (Blitz can) if a campaign has to start on the minute.
+
+**Traffic source** comes from the page a visit starts on: its `utm_*` parameters and, when it was reached from another site, the referring host. A later page with `utm_*` parameters replaces it; anything else keeps it, so a visitor coming back from a payment provider still counts as the campaign that brought them. It's kept for the visit in a `leads_source` session cookie.
 
 Inline forms (`leadsInline()`) follow the page, device, visitor and page-view rules and are hidden after a sign-up; "How often" and closing don't apply to them.
 
@@ -144,8 +155,17 @@ $popup->targetingRules = [
     'visitor' => 'returning',            // all | new | returning
     'dismissDays' => 1,
     'hideAfterConversion' => true,
+    'sources' => ['utm_campaign=spring-*', 'google.com'],
+    'startDate' => '2026-11-27T05:00:00Z',   // ISO 8601, stored in UTC
+    'endDate' => '2026-12-01T05:00:00Z',
 ];
 ```
+
+### Cookie banners
+
+Two overlays at once on someone's first page view hurt both. While the site's cookie banner is on screen, modals and slide-ins wait, then show a second after it has gone; bars and inline forms don't wait. Consent scripts often show their banner a moment after the page loads, so if one is on the page but not yet showing, popups give it a second and a half to appear.
+
+**Settings → Cookie Banner** lists the banners' CSS selectors, one per line. The defaults cover Toss, Cookiebot, OneTrust, Osano, CookieYes, iubenda, Complianz and orestbida's CookieConsent. Add your own, or clear the list to never wait.
 
 ### Built-in Templates
 

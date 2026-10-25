@@ -99,7 +99,7 @@
             <div class="flex-grow">
                 {{ forms.textField({
                     label: 'Trigger Value'|t('leads'),
-                    instructions: 'Seconds for time delay, percentage for scroll, CSS selector for click.'|t('leads'),
+                    instructions: 'Seconds for time delay, percentage for scroll, CSS selector for click, seconds without input for idle (30 if blank), CSS selector of the element for element in view.'|t('leads'),
                     id: 'triggerValue',
                     name: 'triggerValue',
                     value: popup.triggerValue,
@@ -320,6 +320,27 @@
             </div>
         </div>
 
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.dateTimeField({
+                    label: 'Start'|t('leads'),
+                    instructions: 'Leave blank to start straight away.'|t('leads'),
+                    id: 'targetingStartDate',
+                    name: 'targetingRules[startDate]',
+                    value: targeting.startDate ? date(targeting.startDate) : null,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {{ forms.dateTimeField({
+                    label: 'End'|t('leads'),
+                    instructions: 'Leave blank to keep running. Checked in the visitor’s browser too, so cached pages stop showing it on time.'|t('leads'),
+                    id: 'targetingEndDate',
+                    name: 'targetingRules[endDate]',
+                    value: targeting.endDate ? date(targeting.endDate) : null,
+                }) }}
+            </div>
+        </div>
+
         {{ forms.checkboxSelectField({
             label: 'Devices'|t('leads'),
             instructions: 'Decided in the visitor’s browser, so it holds on cached pages.'|t('leads'),
@@ -408,6 +429,16 @@
                 }) }}
             </div>
         </div>
+
+        {{ forms.textareaField({
+            label: 'Traffic source'|t('leads'),
+            instructions: 'Show only to visitors who arrived this way, one per line: a UTM parameter such as `utm_campaign=spring-sale`, or a referring site such as `google.com` (its subdomains too). `*` matches anything. Taken from the page the visit started on, or a later one with UTM parameters, and kept for the visit. Leave blank for everyone.'|t('leads'),
+            id: 'targetingSources',
+            name: 'targetingRules[sources]',
+            value: targeting.sources|join("\n"),
+            rows: 3,
+            class: 'code',
+        }) }}
     </div>
 
     {% if not isNew %}

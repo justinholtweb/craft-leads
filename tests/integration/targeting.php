@@ -121,7 +121,8 @@ check('the popup editor has the targeting fields, not a “future update” note
     $fields = [
         'targetingRules[pages]', 'targetingRules[excludePages]', 'targetingRules[devices][]', 'targetingRules[frequency]',
         'targetingRules[frequencyDays]', 'targetingRules[minPageViews]', 'targetingRules[visitor]', 'targetingRules[dismissDays]',
-        'targetingRules[hideAfterConversion]',
+        'targetingRules[hideAfterConversion]', 'targetingRules[sources]', 'targetingRules[startDate][date]',
+        'targetingRules[endDate][date]',
     ];
     $missing = array_filter($fields, static fn($f) => !str_contains($body, 'name="' . $f . '"'));
 
@@ -148,6 +149,7 @@ check('a save stores the rules in their normalized shape', function() use ($save
         'pages' => ["*leads-targeting-$run*", '/elsewhere/*'], 'excludePages' => ["*leads-targeting-$run-excluded*"],
         'devices' => ['desktop', 'tablet'], 'frequency' => 'days', 'frequencyDays' => 14, 'minPageViews' => 2,
         'visitor' => 'returning', 'hideAfterConversion' => false, 'dismissDays' => 3,
+        'sources' => [], 'startDate' => null, 'endDate' => null,
     ];
     ksort($rules);
     ksort($expected);
@@ -164,7 +166,33 @@ check('…and the editor shows them back', function() use ($adminHttp, $popup, $
         ?: 'not shown back';
 });
 
+check('dates from the editor’s date and time inputs are stored in UTC, with traffic sources', function() use ($save, $adminPost, $stored, $popup) {
+    $status = $save($adminPost, [
+        'startDate' => ['date' => '11/27/2026', 'time' => '12:00 AM', 'timezone' => 'America/New_York'],
+        'endDate' => ['date' => '', 'time' => '', 'timezone' => 'America/New_York'],
+        'sources' => "utm_campaign=black-friday\nGoogle.com",
+    ])->getStatusCode();
+    $rules = $stored($popup->id);
+
+    return ($rules['startDate'] ?? null) === '2026-11-27T05:00:00Z' && array_key_exists('endDate', $rules) && $rules['endDate'] === null
+        && ($rules['sources'] ?? null) === ['utm_campaign=black-friday', 'google.com']
+        ?: "status $status, stored " . json_encode($rules);
+});
+
+check('…and the editor shows them back', function() use ($adminHttp, $popup) {
+    $body = (string)$adminHttp->get("index.php?p=admin/leads/popups/{$popup->id}")->getBody();
+
+    return str_contains($body, "utm_campaign=black-friday\ngoogle.com") && preg_match('/name="targetingRules\[startDate\]\[date\]"[^>]*value="11\/2[67]\/2026"/', $body)
+        ?: 'not shown back';
+});
+
 foreach ([
+    'an end before its start' => [
+        'startDate' => ['date' => '11/27/2026', 'time' => '12:00 AM', 'timezone' => 'UTC'],
+        'endDate' => ['date' => '11/26/2026', 'time' => '12:00 AM', 'timezone' => 'UTC'],
+    ],
+    'a start date that isn’t one' => ['startDate' => ['date' => 'soon', 'time' => '', 'timezone' => 'UTC']],
+    'a traffic source that isn’t one' => ['sources' => 'the newsletter'],
     'no device ticked' => ['devices' => ''],
     'zero days between showings' => ['frequency' => 'days', 'frequencyDays' => '0'],
     'a negative page-view minimum' => ['minPageViews' => '-4'],
@@ -237,6 +265,7 @@ check('the browser gets the device and frequency rules, and not the page pattern
     $expected = [
         'devices' => ['mobile'], 'frequency' => 'session', 'frequencyDays' => 7, 'minPageViews' => 3,
         'visitor' => 'new', 'hideAfterConversion' => true, 'dismissDays' => 7,
+        'sources' => [], 'start' => null, 'end' => null,
     ];
 
     return ($config['targeting'] ?? null) === $expected ?: json_encode($config['targeting'] ?? null);
@@ -263,6 +292,58 @@ check('…and the script itself is the one that decides', function() use ($anon,
     $js = isset($m[1]) ? (string)$anon->get(preg_replace('#^https?://[^/]+/#', '', $m[1]))->getBody() : '';
 
     return str_contains($js, 'LeadsTargeting') && str_contains($js, 'minPageViews') ?: 'old script: ' . ($m[1] ?? 'no src');
+});
+
+check('a modal is told which cookie banners to wait for', function() use ($anon, $page, $configs, $ours, $leads) {
+    $config = $ours($configs((string)$anon->get("index.php?p=$page")->getBody()));
+    $expected = $leads->getSettings()->getConsentBannerSelectors();
+
+    return $expected !== [] && in_array('[data-toss-consent-root]', $expected, true) && ($config['holdFor'] ?? null) === $expected
+        ?: json_encode($config['holdFor'] ?? null);
+});
+
+echo "\nStart and end dates\n";
+
+$withDates = static fn(?string $start, ?string $end) => $save($adminPost, [
+    'pages' => "*leads-targeting-$run*", 'excludePages' => "*leads-targeting-$run-excluded*",
+    'startDate' => $start === null ? '' : ['date' => gmdate('m/d/Y', strtotime($start)), 'time' => gmdate('h:i A', strtotime($start)), 'timezone' => 'UTC'],
+    'endDate' => $end === null ? '' : ['date' => gmdate('m/d/Y', strtotime($end)), 'time' => gmdate('h:i A', strtotime($end)), 'timezone' => 'UTC'],
+], 'active');
+
+check('a popup that hasn’t started isn’t on the page', function() use ($withDates, $anon, $page, $configs, $ours) {
+    $withDates('+2 days', null);
+    return $ours($configs((string)$anon->get("index.php?p=$page")->getBody())) === null ?: 'injected';
+});
+
+check('nor one that has ended', function() use ($withDates, $anon, $page, $configs, $ours) {
+    $withDates('-3 days', '-1 day');
+    return $ours($configs((string)$anon->get("index.php?p=$page")->getBody())) === null ?: 'injected';
+});
+
+check('a running one is, with its end for the browser to check on cached pages', function() use ($withDates, $anon, $page, $configs, $ours) {
+    $withDates('-1 day', '+1 day');
+    $config = $ours($configs((string)$anon->get("index.php?p=$page")->getBody()));
+    $end = $config['targeting']['end'] ?? null;
+
+    return is_int($end) && abs($end / 1000 - strtotime('+1 day')) < 120 ?: json_encode($config['targeting'] ?? null);
+});
+
+check('the popup index says when an active popup is scheduled', function() use ($withDates, $adminPost, $popup) {
+    $withDates('+2 days', null);
+    $response = $adminPost('element-indexes/get-elements', ['elementType' => Popup::class, 'source' => '*', 'viewState' => ['mode' => 'table', 'static' => false], 'criteria' => ['id' => $popup->id]]);
+    $html = (string)(json_decode((string)$response->getBody(), true)['html'] ?? '');
+
+    return str_contains($html, '(scheduled)') ?: 'status ' . $response->getStatusCode() . ', no label';
+});
+
+$withDates(null, null);
+
+echo "\nTraffic sources\n";
+
+check('with a traffic-source rule live, the script loads on every page, to see where visits start', function() use ($save, $adminPost, $run) {
+    $save($adminPost, ['pages' => "*leads-targeting-$run*", 'sources' => 'utm_source=newsletter'], 'active');
+
+    return (new Popups())->countsVisits() ?: 'not loaded';
 });
 
 echo "\nInline forms\n";

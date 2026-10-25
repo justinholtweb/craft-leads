@@ -94,6 +94,13 @@ final class TargetingTest extends TestCase
             'negative close pause' => [['dismissDays' => '-2']],
             'a very long pattern' => [['pages' => '/' . str_repeat('a', 300)]],
             'too many patterns' => [['excludePages' => array_map(static fn($i) => "/p$i", range(1, 101))]],
+            'a source that is neither' => [['sources' => 'newsletter']],
+            'a non-UTM parameter' => [['sources' => 'ref=partner']],
+            'a host with a path' => [['sources' => 'google.com/search']],
+            'too many sources' => [['sources' => array_map(static fn($i) => "s$i.com", range(1, 51))]],
+            'a start that isn’t a date' => [['startDate' => 'next tuesday']],
+            'an end before the start' => [['startDate' => '2026-11-27T00:00:00Z', 'endDate' => '2026-11-26T00:00:00Z']],
+            'an end at the start' => [['startDate' => '2026-11-27T00:00:00Z', 'endDate' => '2026-11-27T00:00:00Z']],
         ];
     }
 
@@ -122,5 +129,43 @@ final class TargetingTest extends TestCase
         $this->assertTrue(Targeting::countsVisits(Targeting::normalize(['minPageViews' => 2])));
         $this->assertTrue(Targeting::countsVisits(Targeting::normalize(['visitor' => 'new'])));
         $this->assertFalse(Targeting::countsVisits(Targeting::normalize(['frequency' => 'once'])));
+    }
+
+    public function testTrafficSources(): void
+    {
+        $rules = Targeting::normalize(['sources' => " UTM_Campaign=Spring-Sale\r\nGoogle.com\n*.facebook.com\nutm_source=*\ngoogle.com"]);
+
+        $this->assertSame(['utm_campaign=Spring-Sale', 'google.com', '*.facebook.com', 'utm_source=*'], $rules['sources'], 'names lower-cased, values kept, duplicates dropped');
+        $this->assertSame([], Targeting::problems($rules));
+        $this->assertSame($rules['sources'], Targeting::forClient($rules)['sources']);
+        $this->assertTrue(Targeting::countsVisits($rules), 'the script has to see the landing page');
+    }
+
+    public function testScheduleDates(): void
+    {
+        $rules = Targeting::normalize(['startDate' => '2026-11-27T00:00:00-05:00', 'endDate' => '2026-12-01T05:00:00Z']);
+
+        $this->assertSame('2026-11-27T05:00:00Z', $rules['startDate'], 'stored in UTC');
+        $this->assertSame([], Targeting::problems($rules));
+        $this->assertSame($rules, Targeting::normalize($rules), 'normalizing twice changes nothing');
+
+        $start = strtotime('2026-11-27T05:00:00Z');
+        $end = strtotime('2026-12-01T05:00:00Z');
+        $this->assertFalse(Targeting::inSchedule($rules, $start - 1));
+        $this->assertTrue(Targeting::inSchedule($rules, $start));
+        $this->assertTrue(Targeting::inSchedule($rules, $end - 1));
+        $this->assertFalse(Targeting::inSchedule($rules, $end));
+        $this->assertSame('scheduled', Targeting::scheduleState($rules, $start - 1));
+        $this->assertNull(Targeting::scheduleState($rules, $start));
+        $this->assertSame('ended', Targeting::scheduleState($rules, $end));
+
+        $client = Targeting::forClient($rules);
+        $this->assertSame($start * 1000, $client['start']);
+        $this->assertSame($end * 1000, $client['end']);
+
+        $open = Targeting::normalize(['startDate' => '', 'endDate' => null]);
+        $this->assertTrue(Targeting::inSchedule($open, 0));
+        $this->assertNull(Targeting::forClient($open)['end']);
+        $this->assertNull(Targeting::scheduleState(Targeting::normalize([]), time()));
     }
 }

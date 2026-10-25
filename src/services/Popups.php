@@ -67,8 +67,9 @@ class Popups extends Component
     }
 
     /**
-     * The active popups whose page rules match `$url`, in priority order. Device, frequency and
-     * visitor rules are left to the page script — see `helpers\Targeting`.
+     * The active popups within their dates whose page rules match `$url`, in priority order.
+     * Device, frequency, visitor and traffic-source rules are left to the page script — see
+     * `helpers\Targeting`.
      *
      * @return Popup[]
      */
@@ -76,18 +77,20 @@ class Popups extends Component
     {
         return array_values(array_filter(
             $this->getActivePopups(),
-            static fn(Popup $popup) => Targeting::matchesPage($popup->getTargeting(), $url),
+            static fn(Popup $popup) => Targeting::inSchedule($popup->getTargeting(), time())
+                && Targeting::matchesPage($popup->getTargeting(), $url),
         ));
     }
 
     /**
-     * Whether any active popup needs the visitor's page views or visits counted — in which case the
-     * page script loads on every page, even one with no popup of its own, so the count is right.
+     * Whether any running popup needs the page script on every page, even one with no popup of its
+     * own — to count page views and visits, or to note where a visit came from where it started.
      */
     public function countsVisits(): bool
     {
         foreach ($this->getActivePopups() as $popup) {
-            if (Targeting::countsVisits($popup->getTargeting())) {
+            $rules = $popup->getTargeting();
+            if (Targeting::countsVisits($rules) && Targeting::scheduleState($rules, time()) !== 'ended') {
                 return true;
             }
         }

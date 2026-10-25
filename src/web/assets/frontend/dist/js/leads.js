@@ -7,7 +7,8 @@
  * full-page cache. The server has already left out popups whose page rules don't match.
  *
  * What the visitor has seen is kept in localStorage (`leads`), or in a cookie of the same name
- * where storage is blocked; the current session is a session cookie (`leads_session`).
+ * where storage is blocked; the current session is a session cookie (`leads_session`), and where
+ * this visit came from — UTM parameters and the referring host — another (`leads_source`).
  */
 (function () {
     'use strict';
@@ -18,6 +19,10 @@
     var LEGACY_COOKIE_PREFIX = 'leads_seen_';
     var STORE_KEY = 'leads';
     var SESSION_COOKIE = 'leads_session';
+    var SOURCE_COOKIE = 'leads_source';
+    var BANNER_SETTLE = 1500;   // ms after load a cookie banner may take to appear
+    var BANNER_POLL = 500;
+    var BANNER_GRACE = 1000;    // ms between the banner going and a held popup showing
     var DAY = 24 * 60 * 60 * 1000;
     var SUBMIT_URL = '/leads/submit';
     var TRACK_URL = '/leads/track';
@@ -46,12 +51,16 @@
      * Whether a popup with targeting `t` may show now. `ctx`:
      *   device, views (this visitor's page views, this one included), visits (sessions, this one
      *   included), now (ms), seen ({s: last shown, c: closed, x: converted}, ms), shownThisSession,
-     *   inline (an inline form: no frequency or close rules — it can't be closed).
+     *   inline (an inline form: no frequency or close rules — it can't be closed), source (where
+     *   the visit came from: {u: {utm_*: value}, r: referring host}).
      */
     function allows(t, ctx) {
         t = t || {};
         var seen = ctx.seen || {};
 
+        if (t.start && ctx.now < t.start) return false;
+        if (t.end && ctx.now >= t.end) return false;
+        if (t.sources && t.sources.length && !fromSource(t.sources, ctx.source)) return false;
         if (t.devices && t.devices.length && t.devices.indexOf(ctx.device) === -1) return false;
         if (t.visitor === 'new' && ctx.visits > 1) return false;
         if (t.visitor === 'returning' && ctx.visits < 2) return false;
@@ -101,12 +110,69 @@
         };
     }
 
-    window.LeadsTargeting = { deviceType: deviceType, allows: allows, exitScroll: exitScroll };
+    /** `*` matches anything; everything else literally, ignoring case. */
+    function glob(pattern, value) {
+        var re = String(pattern).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+        return new RegExp('^' + re + '$', 'i').test(String(value));
+    }
+
+    /**
+     * Whether the visit came in through any of `sources`: `utm_name=value` lines against the UTM
+     * parameters it arrived with, anything else against the referring host and its parents
+     * (`google.com` covers `www.google.com`).
+     */
+    function fromSource(sources, src) {
+        src = src || {};
+        var utm = src.u || {};
+        var host = String(src.r || '').toLowerCase();
+
+        for (var i = 0; i < sources.length; i++) {
+            var line = sources[i];
+            var eq = line.indexOf('=');
+            if (eq !== -1) {
+                var key = line.slice(0, eq).toLowerCase();
+                if (Object.prototype.hasOwnProperty.call(utm, key) && glob(line.slice(eq + 1), utm[key])) return true;
+            } else if (host && (glob(line, host) || glob('*.' + line, host))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Where the page at `search` (location.search) was arrived at from: its UTM parameters, and
+     * the referrer's host when that is another site. `own` is this site's host.
+     */
+    function arrival(search, referrer, own) {
+        var utm = {};
+        var any = false;
+        String(search || '').replace(/^\?/, '').split('&').forEach(function (pair) {
+            var eq = pair.indexOf('=');
+            var key = eq === -1 ? pair : pair.slice(0, eq);
+            try { key = decodeURIComponent(key.replace(/\+/g, ' ')).toLowerCase(); } catch (e) { return; }
+            if (!/^utm_[a-z0-9_]{1,40}$/.test(key)) return;
+            var value = eq === -1 ? '' : pair.slice(eq + 1);
+            try { value = decodeURIComponent(value.replace(/\+/g, ' ')); } catch (e) { return; }
+            utm[key] = value.slice(0, 200);
+            any = true;
+        });
+
+        var host = '';
+        var m = /^https?:\/\/([^\/?#:]+)/i.exec(String(referrer || ''));
+        if (m && m[1].toLowerCase() !== String(own || '').toLowerCase()) host = m[1].toLowerCase();
+
+        return { u: utm, r: host, tagged: any };
+    }
+
+    window.LeadsTargeting = { deviceType: deviceType, allows: allows, exitScroll: exitScroll, fromSource: fromSource, arrival: arrival };
 
     // ---- Visitor state -----------------------------------------------------------------------
 
     var state = readState();
     var session = readSession();
+    var source = readSource();
+    var loadedAt = Date.now();
 
     function readState() {
         var raw = null;
@@ -155,13 +221,37 @@
 
     function countVisit() {
         state.v++;
-        if (session === null) {
+        var fresh = session === null;
+        if (fresh) {
             // A new session: another visit.
             state.n++;
             session = [];
             writeSession();
         }
         writeState();
+        noteSource(fresh);
+    }
+
+    /**
+     * The visit's source is set by the page it started on, and replaced by a later page that
+     * carries UTM parameters — a payment provider sending the visitor back doesn't count.
+     */
+    function noteSource(fresh) {
+        var here = arrival(window.location.search, document.referrer, window.location.hostname);
+        if (fresh || here.tagged) {
+            source = { u: here.u, r: here.r };
+            setCookie(SOURCE_COOKIE, JSON.stringify(source), 0);
+        }
+    }
+
+    function readSource() {
+        try {
+            var raw = getCookie(SOURCE_COOKIE);
+            var parsed = raw ? JSON.parse(raw) : null;
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (e) {
+            return {};
+        }
     }
 
     function currentDevice() {
@@ -185,6 +275,7 @@
             seen: state.p[config.id],
             shownThisSession: !!session && session.indexOf(String(config.id)) !== -1,
             inline: config.type === 'inline',
+            source: source,
         });
     }
 
@@ -293,6 +384,44 @@
                 }
                 break;
 
+            case 'idle':
+                // No mouse, keys, scrolling or touch for N seconds.
+                var idleMs = (parseInt(config.triggerValue, 10) || 30) * 1000;
+                var idleTimer = null;
+                var idleDone = false;
+                var idleEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'wheel'];
+                var idleReset = function () {
+                    if (idleDone) return;
+                    if (idleTimer) clearTimeout(idleTimer);
+                    idleTimer = setTimeout(function () {
+                        idleDone = true;
+                        idleEvents.forEach(function (type) { window.removeEventListener(type, idleReset, true); });
+                        showPopup(popup, config);
+                    }, idleMs);
+                };
+                idleEvents.forEach(function (type) { window.addEventListener(type, idleReset, { capture: true, passive: true }); });
+                idleReset();
+                break;
+
+            case 'view':
+                // When an element matching the selector scrolls a fifth of the way up the screen.
+                var watched = [];
+                try {
+                    watched = config.triggerValue ? document.querySelectorAll(config.triggerValue) : [];
+                } catch (e) { /* not a selector */ }
+                if (!watched.length || typeof window.IntersectionObserver !== 'function') break;
+                var observer = new window.IntersectionObserver(function (entries) {
+                    for (var i = 0; i < entries.length; i++) {
+                        if (entries[i].isIntersecting) {
+                            observer.disconnect();
+                            showPopup(popup, config);
+                            return;
+                        }
+                    }
+                }, { rootMargin: '0px 0px -20% 0px' });
+                for (var w = 0; w < watched.length; w++) observer.observe(watched[w]);
+                break;
+
             case 'click':
                 var selector = config.triggerValue;
                 if (selector) {
@@ -339,6 +468,18 @@
         // another tab, a click trigger pressed twice).
         if (popup.parentNode || !allowed(config)) return;
 
+        // Not on top of the cookie banner: wait until it's gone, then show.
+        if (popup._leadsHeld) return;
+        var wait = bannerWait(config.holdFor, popup);
+        if (wait) {
+            popup._leadsHeld = true;
+            setTimeout(function () {
+                popup._leadsHeld = false;
+                showPopup(popup, config);
+            }, wait);
+            return;
+        }
+
         document.body.appendChild(popup);
 
         mark(config.id, 's');
@@ -379,6 +520,52 @@
             }
         };
         document.addEventListener('keydown', popup._leadsEscHandler);
+    }
+
+    /**
+     * How long to put a popup off for the site's cookie banner, in ms; 0 to show it now. While a
+     * banner is on screen, check again shortly. In the first moments after load, a banner that's
+     * on the page but not yet showing may be about to — consent scripts decide asynchronously.
+     */
+    function bannerWait(selectors, popup) {
+        if (!selectors || !selectors.length) return 0;
+
+        var present = false;
+        for (var i = 0; i < selectors.length; i++) {
+            var found;
+            try {
+                found = document.querySelectorAll(selectors[i]);
+            } catch (e) {
+                continue;
+            }
+            for (var j = 0; j < found.length; j++) {
+                present = true;
+                if (onScreen(found[j])) {
+                    popup._leadsBanner = true;
+                    popup._leadsBannerChecked = true;
+                    return BANNER_POLL;
+                }
+            }
+        }
+
+        if (popup._leadsBanner) {
+            // It's just gone: give the visitor a moment.
+            popup._leadsBanner = false;
+            return BANNER_GRACE;
+        }
+
+        // Only before the first time this popup would have shown.
+        var first = !popup._leadsBannerChecked;
+        popup._leadsBannerChecked = true;
+        var age = Date.now() - loadedAt;
+        return first && present && age < BANNER_SETTLE ? BANNER_SETTLE - age : 0;
+    }
+
+    function onScreen(el) {
+        if (el.hidden || !el.getClientRects || !el.getClientRects().length) return false;
+        var style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+
+        return !style || (style.visibility !== 'hidden' && style.display !== 'none' && style.opacity !== '0');
     }
 
     function closePopup(popup, config) {

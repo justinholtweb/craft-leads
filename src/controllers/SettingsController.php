@@ -22,7 +22,7 @@ class SettingsController extends Controller
     }
 
     /** The settings the form posts; nothing else can be set through it. */
-    public const EDITABLE = ['autoInjectScript', 'defaultButtonColor', 'defaultBackgroundColor', 'dataRetentionDays', 'enableHoneypot', 'rateLimitPerMinute', 'trackingPerMinute', 'confirmationExpiryHours', 'confirmationSubject', 'confirmationBody', 'confirmationTemplate', 'lockPurpose'];
+    public const EDITABLE = ['autoInjectScript', 'defaultButtonColor', 'defaultBackgroundColor', 'dataRetentionDays', 'enableHoneypot', 'rateLimitPerMinute', 'trackingPerMinute', 'consentBannerSelectors', 'confirmationExpiryHours', 'confirmationSubject', 'confirmationBody', 'confirmationTemplate', 'lockPurpose'];
 
     public function actionIndex(): Response
     {

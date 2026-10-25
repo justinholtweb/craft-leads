@@ -82,7 +82,7 @@ final class EnumsTest extends TestCase
     public function testTriggerTypeValuesMatchElementValidationRange(): void
     {
         $values = array_map(fn(TriggerType $t) => $t->value, TriggerType::cases());
-        $this->assertSame(['time', 'scroll', 'exit', 'click'], $values);
+        $this->assertSame(['time', 'scroll', 'exit', 'click', 'idle', 'view'], $values);
     }
 
     public function testTriggerTypeLabels(): void
@@ -91,6 +91,8 @@ final class EnumsTest extends TestCase
         $this->assertSame('Scroll Percentage', TriggerType::Scroll->label());
         $this->assertSame('Exit Intent', TriggerType::Exit->label());
         $this->assertSame('Click', TriggerType::Click->label());
+        $this->assertSame('Idle', TriggerType::Idle->label());
+        $this->assertSame('Element in View', TriggerType::View->label());
     }
 
     // ---- PopupPosition ------------------------------------------------------

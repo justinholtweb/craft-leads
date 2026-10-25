@@ -23,8 +23,12 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
         endSession() {
             for (const [name, c] of cookies) if (!c.persistent) cookies.delete(name);
         },
-        /** Load a page carrying `configs`; returns the popups it put on screen and the tracked events. */
-        load(configs = []) {
+        /**
+         * Load a page carrying `configs`; returns the popups it put on screen and the tracked events.
+         * `page.search`/`page.referrer` say how it was reached; `page.banner` is a cookie banner on
+         * it (`{ visible }`, which the test can change).
+         */
+        load(configs = [], page = {}) {
             const shown = [];
             const events = [];
             const timers = [];
@@ -50,7 +54,11 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
                     const [name, value] = pair.split('=');
                     cookies.set(name, { value, persistent: attrs.some((a) => a.startsWith('expires=')) });
                 },
-                createElement: element, addEventListener() {}, removeEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; },
+                referrer: page.referrer || '',
+                createElement: element, addEventListener() {}, removeEventListener() {}, querySelector() { return null; },
+                querySelectorAll: (selector) => (page.banner && selector === '#banner'
+                    ? [{ hidden: false, getClientRects: () => (page.banner.visible ? [{}] : []) }]
+                    : []),
             };
             const window = {
                 _leadsConfig: configs,
@@ -62,11 +70,14 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
                     : { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } },
                 scrollY: 0,
                 addEventListener: (type, fn) => listeners.push({ type, fn }),
-                location: { href: 'https://example.com/' },
+                removeEventListener() {},
+                getComputedStyle: () => ({ visibility: 'visible', display: 'block', opacity: '1' }),
+                location: { href: 'https://example.com/' + (page.search || ''), search: page.search || '', hostname: 'example.com' },
             };
             const context = {
                 window, document, navigator: window.navigator, JSON, Date, Math, String, RegExp,
-                setTimeout: (fn) => timers.push(fn), requestAnimationFrame: () => {},
+                setTimeout: (fn) => timers.push(fn) , clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1] = () => {}; },
+                requestAnimationFrame: () => {},
                 encodeURIComponent, decodeURIComponent,
             };
             vm.runInNewContext(source, context);
@@ -78,13 +89,16 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
                 listeners.filter((l) => l.type === 'scroll').forEach((l) => l.fn());
             };
 
-            return { shown, events, scrollTo, targeting: window.LeadsTargeting };
+            /** Run the timers set so far (and only those). */
+            const tick = () => timers.splice(0).forEach((fn) => fn());
+
+            return { shown, events, scrollTo, tick, targeting: window.LeadsTargeting };
         },
     };
 }
 
 const popup = (id, targeting = {}) => ({ id, type: 'modal', trigger: 'time', triggerValue: '1', html: `popup-${id}`, targeting });
-const { deviceType, allows, exitScroll } = browser().load().targeting;
+const { deviceType, allows, exitScroll, fromSource, arrival } = browser().load().targeting;
 
 test('device type', () => {
     const cases = [
@@ -228,4 +242,95 @@ test('on a desktop, scrolling up is not exit intent', () => {
     page.scrollTo(900);
     page.scrollTo(500);
     assert.deepEqual(page.shown, []);
+});
+
+test('start and end dates', () => {
+    const ctx = (now) => ({ device: 'desktop', views: 1, visits: 1, now, seen: {}, shownThisSession: false, inline: false });
+    const t = { start: 10 * DAY, end: 20 * DAY };
+    assert.equal(allows(t, ctx(9 * DAY)), false, 'before the start');
+    assert.equal(allows(t, ctx(10 * DAY)), true, 'from the start');
+    assert.equal(allows(t, ctx(20 * DAY - 1)), true);
+    assert.equal(allows(t, ctx(20 * DAY)), false, 'at the end');
+    assert.equal(allows({ end: 20 * DAY }, { ...ctx(25 * DAY), inline: true }), false, 'inline forms end too');
+    assert.equal(allows({ start: null, end: null }, ctx(0)), true);
+});
+
+test('where a visit came from', () => {
+    const plain = (v) => JSON.parse(JSON.stringify(v));
+    assert.deepEqual(plain(arrival('?utm_source=News%20letter&UTM_Campaign=spring+sale&id=4&utm_bad-key=x', 'https://www.google.com/search?q=x', 'example.com')),
+        { u: { utm_source: 'News letter', utm_campaign: 'spring sale' }, r: 'www.google.com', tagged: true });
+    assert.deepEqual(plain(arrival('', 'https://example.com/blog', 'example.com')), { u: {}, r: '', tagged: false }, 'own site is no referrer');
+    assert.deepEqual(plain(arrival('?utm_source=%E0%A4%A', '', 'example.com')), { u: {}, r: '', tagged: false }, 'broken encoding is skipped');
+
+    const src = { u: { utm_source: 'newsletter', utm_campaign: 'spring-sale-2026' }, r: 'l.facebook.com' };
+    assert.equal(fromSource(['utm_source=newsletter'], src), true);
+    assert.equal(fromSource(['utm_source=NEWSLETTER'], src), true, 'case-insensitive');
+    assert.equal(fromSource(['utm_campaign=spring-*'], src), true, 'wildcard');
+    assert.equal(fromSource(['utm_campaign=spring'], src), false, 'whole value');
+    assert.equal(fromSource(['utm_medium=email'], src), false, 'parameter absent');
+    assert.equal(fromSource(['facebook.com'], src), true, 'subdomain of a host');
+    assert.equal(fromSource(['book.com'], src), false, 'not just the end of the name');
+    assert.equal(fromSource(['*.facebook.*'], src), true);
+    assert.equal(fromSource(['google.com', 'utm_source=newsletter'], src), true, 'any line');
+    assert.equal(fromSource(['google.com'], {}), false, 'direct visit');
+    assert.equal(fromSource(['a.b'], { r: 'aXb' }), false, 'dots are literal');
+});
+
+test('a traffic-source rule follows the visitor past the landing page', () => {
+    const b = browser();
+    const p = popup(17, { sources: ['utm_campaign=spring'] });
+    assert.deepEqual(b.load([], { search: '?utm_campaign=spring', referrer: 'https://news.example.org/' }).shown, []);
+    assert.deepEqual(b.load([p], { referrer: 'https://example.com/landing' }).shown, ['popup-17'], 'next page, same visit');
+    assert.deepEqual(b.load([p], { referrer: 'https://www.paypal.com/' }).shown, ['popup-17'], 'back from paying: still the same source');
+    assert.deepEqual(b.load([p], { search: '?utm_campaign=autumn' }).shown, [], 'a new campaign replaces it');
+    b.endSession();
+    assert.deepEqual(b.load([p]).shown, [], 'a new visit starts afresh');
+});
+
+test('a referrer rule', () => {
+    const b = browser();
+    const p = popup(18, { sources: ['google.com'] });
+    assert.deepEqual(b.load([p], { referrer: 'https://www.google.com/' }).shown, ['popup-18']);
+    const c = browser();
+    assert.deepEqual(c.load([p], { referrer: 'https://www.bing.com/' }).shown, []);
+});
+
+test('idle: shows once the visitor stops', () => {
+    const page = browser().load([{ ...popup(19), trigger: 'idle', triggerValue: '20' }]);
+    assert.deepEqual(page.shown, ['popup-19']);
+});
+
+test('element in view needs the element, and a selector that parses', () => {
+    const page = browser().load([{ ...popup(20), trigger: 'view', triggerValue: '#nope' }, { ...popup(21), trigger: 'view', triggerValue: '[[bad' }]);
+    assert.deepEqual(page.shown, []);
+});
+
+test('a modal waits for the cookie banner, and shows a moment after it goes', () => {
+    const banner = { visible: true };
+    const page = browser().load([{ ...popup(22), holdFor: ['#banner', '[[not a selector'] }], { banner });
+    assert.deepEqual(page.shown, [], 'banner up');
+    page.tick();
+    assert.deepEqual(page.shown, [], 'still up');
+    banner.visible = false;
+    page.tick();
+    assert.deepEqual(page.shown, [], 'gone, grace period');
+    page.tick();
+    assert.deepEqual(page.shown, ['popup-22']);
+});
+
+test('no banner on the page, no wait', () => {
+    assert.deepEqual(browser().load([{ ...popup(23), holdFor: ['#banner'] }]).shown, ['popup-23']);
+});
+
+test('a banner still hidden at load (Toss decides asynchronously) gets a moment to appear', () => {
+    const banner = { visible: false };
+    const page = browser().load([{ ...popup(24), holdFor: ['#banner'] }], { banner });
+    assert.deepEqual(page.shown, [], 'on the page, not yet showing: wait');
+    banner.visible = true;
+    page.tick();
+    assert.deepEqual(page.shown, [], 'it appeared');
+    banner.visible = false;
+    page.tick();
+    page.tick();
+    assert.deepEqual(page.shown, ['popup-24']);
 });

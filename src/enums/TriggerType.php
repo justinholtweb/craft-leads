@@ -8,6 +8,8 @@ enum TriggerType: string
     case Scroll = 'scroll';
     case Exit = 'exit';
     case Click = 'click';
+    case Idle = 'idle';
+    case View = 'view';
 
     public function label(): string
     {
@@ -16,6 +18,8 @@ enum TriggerType: string
             self::Scroll => 'Scroll Percentage',
             self::Exit => 'Exit Intent',
             self::Click => 'Click',
+            self::Idle => 'Idle',
+            self::View => 'Element in View',
         };
     }
 }

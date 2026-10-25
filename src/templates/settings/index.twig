@@ -89,6 +89,21 @@
 
         <hr>
 
+        <h2>{{ 'Cookie Banner'|t('leads') }}</h2>
+
+        {{ forms.textareaField({
+            label: 'Wait for the cookie banner'|t('leads'),
+            instructions: 'CSS selectors for your cookie banner, one per line. While one is on screen, modals and slide-ins wait, and show a moment after it has gone. The defaults cover Toss and the common consent platforms. Leave blank to never wait.'|t('leads'),
+            id: 'consentBannerSelectors',
+            name: 'settings[consentBannerSelectors]',
+            value: settings.consentBannerSelectors,
+            rows: 5,
+            class: 'code',
+            errors: settings.getErrors('consentBannerSelectors'),
+        }) }}
+
+        <hr>
+
         <h2>{{ 'Double Opt-in'|t('leads') }}</h2>
 
         <p class="light">{{ 'Used by popups whose double opt-in is set to “Leads emails a confirmation link”. Sent with Craft’s email settings.'|t('leads') }}</p>

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Start and end dates.** A popup can switch itself on and off, for a seasonal campaign. The server leaves out a popup outside its dates and the browser checks them again, so a cached page stops showing it when it ends. In the popup index an active popup outside its dates is marked *(scheduled)* or *(ended)*.
+- **Traffic-source targeting.** Show a popup only to visitors who arrived with a UTM parameter (`utm_campaign=spring-sale`, `*` wildcards allowed) or from a referring site (`google.com`, subdomains included). The source is taken from the page the visit started on, or a later page with UTM parameters, and kept for the visit in a `leads_source` session cookie, so the campaign follows the visitor past the landing page. ([#6](https://github.com/justinholtweb/craft-leads/issues/6))
+- **Idle trigger.** Show after N seconds without mouse, keyboard, scroll or touch input.
+- **Element-in-view trigger.** Show when an element matching a CSS selector scrolls a fifth of the way up the screen.
+- **Waiting for the cookie banner.** While the site's cookie banner is on screen, modals and slide-ins hold back and show a second after it has gone. The banners are found by CSS selectors under **Settings → Cookie Banner**, which by default cover Toss and the common consent platforms.
+
 ## 5.2.1 - 2026-10-15
 ### Fixed
 

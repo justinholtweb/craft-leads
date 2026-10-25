@@ -23,6 +23,12 @@ class Settings extends Model
     /** Tracking events (impressions, conversions, closes) one address may send in a minute. */
     public int $trackingPerMinute = 60;
 
+    /**
+     * CSS selectors for the site's cookie banner, one per line. While one of them is on screen,
+     * modals and slide-ins wait, and show once it has gone. Blank to never wait.
+     */
+    public string $consentBannerSelectors = "[data-toss-consent-root]\n#CybotCookiebotDialog\n#onetrust-banner-sdk\n.osano-cm-dialog\n.cky-consent-container\n#iubenda-cs-banner\n#cmplz-cookiebanner-container .cmplz-cookiebanner\n#cc-main .cm\n.cc-window";
+
     /** How long a double opt-in confirmation link works, in hours. */
     public int $confirmationExpiryHours = 48;
 
@@ -59,6 +65,7 @@ class Settings extends Model
                 }
             }],
             [['confirmationTemplate'], 'string', 'max' => 500],
+            [['consentBannerSelectors'], 'string', 'max' => 2000],
             [['lockPurpose'], 'match', 'pattern' => '/^[A-Za-z0-9_-]{0,64}$/'],
             [['defaultButtonColor', 'defaultBackgroundColor'], 'string', 'max' => 20],
             [['dataRetentionDays'], 'integer', 'min' => 0],
@@ -66,5 +73,15 @@ class Settings extends Model
             [['trackingPerMinute'], 'integer', 'min' => 1, 'max' => 600],
             [['autoInjectScript', 'enableHoneypot', 'allowPrivateWebhookHosts'], 'boolean'],
         ];
+    }
+
+    /**
+     * The cookie banner selectors as a list.
+     *
+     * @return string[]
+     */
+    public function getConsentBannerSelectors(): array
+    {
+        return array_values(array_filter(array_map('trim', preg_split('/\R/', $this->consentBannerSelectors) ?: []), static fn($s) => $s !== ''));
     }
 }

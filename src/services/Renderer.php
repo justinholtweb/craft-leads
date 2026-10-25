@@ -58,6 +58,10 @@ class Renderer extends Component
             'html' => $this->renderPopup($popup),
             'customCss' => $popup->customCss,
             'targeting' => Targeting::forClient($popup->getTargeting()),
+            // Overlays wait while the site's cookie banner is on screen; bars and inline forms don't.
+            'holdFor' => in_array($popup->popupType, ['modal', 'slidein'], true)
+                ? \justinholtweb\leads\Plugin::getInstance()->getSettings()->getConsentBannerSelectors()
+                : [],
         ];
     }
 

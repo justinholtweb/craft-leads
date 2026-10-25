@@ -201,10 +201,24 @@ class Popup extends Element
     protected function attributeHtml(string $attribute): string
     {
         return match ($attribute) {
-            'popupStatus' => '<span class="status ' . PopupStatus::from($this->popupStatus)->color() . '"></span>' . PopupStatus::from($this->popupStatus)->label(),
+            'popupStatus' => '<span class="status ' . PopupStatus::from($this->popupStatus)->color() . '"></span>' . PopupStatus::from($this->popupStatus)->label() . $this->scheduleLabel(),
             'popupType' => PopupType::from($this->popupType)->label(),
             'triggerType' => ucfirst($this->triggerType),
             default => parent::attributeHtml($attribute),
+        };
+    }
+
+    /** “ (scheduled)” or “ (ended)” after an active popup's status, when its dates say so. */
+    private function scheduleLabel(): string
+    {
+        if ($this->popupStatus !== PopupStatus::Active->value) {
+            return '';
+        }
+
+        return match (Targeting::scheduleState($this->getTargeting(), time())) {
+            'scheduled' => ' <span class="light">(' . Craft::t('leads', 'scheduled') . ')</span>',
+            'ended' => ' <span class="light">(' . Craft::t('leads', 'ended') . ')</span>',
+            default => '',
         };
     }
 
@@ -228,7 +242,7 @@ class Popup extends Element
         $rules = parent::defineRules();
         $rules[] = [['popupType'], 'required'];
         $rules[] = [['popupType'], 'in', 'range' => ['modal', 'slidein', 'bar', 'inline']];
-        $rules[] = [['triggerType'], 'in', 'range' => ['time', 'scroll', 'exit', 'click']];
+        $rules[] = [['triggerType'], 'in', 'range' => ['time', 'scroll', 'exit', 'click', 'idle', 'view']];
         $rules[] = [['popupStatus'], 'in', 'range' => ['draft', 'active', 'paused', 'archived']];
         $rules[] = [['heading', 'buttonText', 'triggerValue'], 'string', 'max' => 255];
         $rules[] = [['buttonColor', 'backgroundColor'], 'string', 'max' => 20];

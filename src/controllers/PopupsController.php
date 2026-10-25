@@ -3,6 +3,7 @@
 namespace justinholtweb\leads\controllers;
 
 use Craft;
+use craft\helpers\DateTimeHelper;
 use craft\web\Controller;
 use justinholtweb\leads\elements\Popup;
 use justinholtweb\leads\enums\IntegrationProvider;
@@ -172,7 +173,7 @@ class PopupsController extends Controller
         $popup->formFields = $request->getBodyParam('formFields');
         // The editor posts pattern lists as one-per-line text and devices as checkboxes; store the
         // normalized shape, so what the page script reads is exactly what validation looked at.
-        $popup->targetingRules = Targeting::normalize($request->getBodyParam('targetingRules', []));
+        $popup->targetingRules = Targeting::normalize(self::targetingDates((array)$request->getBodyParam('targetingRules', [])));
         $popup->integrationProvider = $request->getBodyParam('integrationProvider') ?: null;
         // Only the settings the chosen provider takes; the form carries every provider's fields.
         $integrationSettings = (array)$request->getBodyParam('integrationSettings', []);
@@ -221,5 +222,30 @@ class PopupsController extends Controller
         }
 
         return $this->redirect("leads/popups/{$duplicate->id}");
+    }
+
+    /**
+     * The editor's start and end dates arrive as Craft's date and time inputs, in the user's
+     * timezone; the rules store them as ISO 8601 UTC. A date Craft can't read is passed on as
+     * typed, so validation says so instead of quietly dropping it.
+     *
+     * @param array<string, mixed> $rules
+     * @return array<string, mixed>
+     */
+    private static function targetingDates(array $rules): array
+    {
+        foreach (['startDate', 'endDate'] as $key) {
+            $value = $rules[$key] ?? null;
+            if (is_array($value) && trim((string)($value['date'] ?? '')) === '') {
+                $rules[$key] = null;
+            } elseif ($value !== null && $value !== '') {
+                $date = DateTimeHelper::toDateTime($value);
+                $rules[$key] = $date
+                    ? $date->setTimezone(new \DateTimeZone('UTC'))->format(Targeting::DATE_FORMAT)
+                    : (is_array($value) ? trim(($value['date'] ?? '') . ' ' . ($value['time'] ?? '')) : $value);
+            }
+        }
+
+        return $rules;
     }
 }
