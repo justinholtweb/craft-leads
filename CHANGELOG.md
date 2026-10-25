@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 5.3.0 - 2026-10-25
 ### Added
 
 - **Start and end dates.** A popup can switch itself on and off, for a seasonal campaign. The server leaves out a popup outside its dates and the browser checks them again, so a cached page stops showing it when it ends. In the popup index an active popup outside its dates is marked *(scheduled)* or *(ended)*.
