@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 5.4.0 - 2026-11-08
 ### Added
 
 - **Signed-in and user-group targeting.** Show a popup to guests only, to signed-in users only, or to users in particular groups. ([#6](https://github.com/justinholtweb/craft-leads/issues/6))
