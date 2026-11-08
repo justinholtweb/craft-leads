@@ -9,6 +9,10 @@
  * What the visitor has seen is kept in localStorage (`leads`), or in a cookie of the same name
  * where storage is blocked; the current session is a session cookie (`leads_session`), and where
  * this visit came from — UTM parameters and the referring host — another (`leads_source`).
+ *
+ * Whether the visitor is signed in, their user groups and their cart can't be kept in the browser
+ * or read from a cached page. When a popup on the page has such a rule, the script asks the
+ * server once (`visitorUrl`, an uncached action) for just that; otherwise it asks nothing.
  */
 (function () {
     'use strict';
@@ -82,6 +86,72 @@
             default:
                 return true;
         }
+    }
+
+    /**
+     * Whether the audience and cart rules in `t` allow a popup, given what the server said about
+     * the visitor (`v`: {user: {guest, groups}, cart: {empty, subtotal, qty, in}}). A rule whose
+     * answer is missing — the request failed, or was turned away — doesn't allow it.
+     */
+    function visitorAllows(t, v) {
+        t = t || {};
+        v = v || {};
+        var needs = t.needs || [];
+        var i;
+
+        if (needs.indexOf('user') !== -1) {
+            var user = v.user;
+            if (!user) return false;
+            var groups = t.groups || [];
+            if (t.audience === 'guests' && !user.guest) return false;
+            if ((t.audience === 'users' || groups.length) && user.guest) return false;
+            if (groups.length) {
+                var inGroup = false;
+                for (i = 0; i < groups.length; i++) if ((user.groups || []).indexOf(groups[i]) !== -1) inGroup = true;
+                if (!inGroup) return false;
+            }
+        }
+
+        if (needs.indexOf('cart') !== -1) {
+            var cart = v.cart;
+            if (!cart) return false;
+            var subtotal = +cart.subtotal || 0;
+            if (t.cart === 'empty' && !cart.empty) return false;
+            if (t.cart === 'notEmpty' && cart.empty) return false;
+            if (typeof t.cartMin === 'number' && subtotal < t.cartMin) return false;
+            if (typeof t.cartBelow === 'number' && subtotal >= t.cartBelow) return false;
+            if (t.cartIn && t.cartIn.length) {
+                var holds = false;
+                for (i = 0; i < t.cartIn.length; i++) if ((cart.in || []).indexOf(t.cartIn[i]) !== -1) holds = true;
+                if (!holds) return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * What to ask the visitor action, for every popup in `configs` that needs it: the URL to call,
+     * or null when none does.
+     */
+    function visitorQuery(configs) {
+        var url = null;
+        var need = [];
+        var ids = [];
+
+        (configs || []).forEach(function (config) {
+            var t = config.targeting || {};
+            if (!config.visitorUrl || !t.needs || !t.needs.length) return;
+            url = url || config.visitorUrl;
+            t.needs.forEach(function (n) { if (need.indexOf(n) === -1) need.push(n); });
+            (t.cartIn || []).forEach(function (id) { if (ids.indexOf(id) === -1) ids.push(id); });
+        });
+
+        if (!url) return null;
+        need.sort();
+        ids.sort(function (a, b) { return a - b; });
+
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + 'need=' + need.join(',') + (ids.length ? '&in=' + ids.join(',') : '');
     }
 
     /**
@@ -165,7 +235,10 @@
         return { u: utm, r: host, tagged: any };
     }
 
-    window.LeadsTargeting = { deviceType: deviceType, allows: allows, exitScroll: exitScroll, fromSource: fromSource, arrival: arrival };
+    window.LeadsTargeting = {
+        deviceType: deviceType, allows: allows, visitorAllows: visitorAllows, visitorQuery: visitorQuery,
+        exitScroll: exitScroll, fromSource: fromSource, arrival: arrival,
+    };
 
     // ---- Visitor state -----------------------------------------------------------------------
 
@@ -173,6 +246,10 @@
     var session = readSession();
     var source = readSource();
     var loadedAt = Date.now();
+    var visitor = null;        // what the server said about the visitor, once it has
+    var visitorAsking = null;  // the request in flight
+    var visitorAsked = 0;      // how many requests have been made, to keep only the latest answer
+    var refused = [];          // overlays whose trigger fired while the audience or cart rules said no
 
     function readState() {
         var raw = null;
@@ -264,6 +341,49 @@
         return deviceType(window.navigator, short, coarse);
     }
 
+    function needsVisitor(config) {
+        return !!(config.targeting && config.targeting.needs && config.targeting.needs.length);
+    }
+
+    /** Ask the server about the visitor — once, or again with `fresh`. Resolves with the answer. */
+    function askVisitor(fresh) {
+        if (visitorAsking && !fresh) return visitorAsking;
+
+        var url = visitorQuery(window._leadsConfig);
+        if (!url || typeof window.fetch !== 'function') {
+            visitor = {};
+            return (visitorAsking = { then: function (fn) { fn(visitor); } });
+        }
+
+        // Only the latest request's answer counts: after leads:cart-changed, the page-load request
+        // may come back after the fresh one, with the cart as it was.
+        var mine = ++visitorAsked;
+        visitorAsking = window.fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } })
+            .then(function (response) { return response.ok ? response.json() : {}; })
+            .catch(function () { return {}; })
+            .then(function (data) {
+                if (mine === visitorAsked) visitor = data && typeof data === 'object' ? data : {};
+                return visitor;
+            });
+
+        return visitorAsking;
+    }
+
+    /** The visitor's cart changed (an add to cart by Ajax): ask again, and retry refused overlays. */
+    function cartChanged() {
+        var wanted = (window._leadsConfig || []).some(function (config) {
+            return needsVisitor(config) && config.targeting.needs.indexOf('cart') !== -1;
+        });
+        if (!wanted) return;
+
+        askVisitor(true).then(function () {
+            var retry = refused;
+            refused = [];
+            retry.forEach(function (r) { showPopup(r.popup, r.config); });
+        });
+    }
+
+    /** Every rule but the audience and cart ones, which need the server's answer. */
     function allowed(config) {
         if (config.type !== 'inline' && getCookie(LEGACY_COOKIE_PREFIX + config.id)) return false;
 
@@ -287,6 +407,10 @@
         var config = window._leadsConfig;
         if (!config || !config.length) return;
 
+        // One request for the whole page, started now so it's back before most triggers fire.
+        if (config.some(needsVisitor)) askVisitor();
+        window.addEventListener('leads:cart-changed', cartChanged);
+
         config.forEach(function (popup) {
             if (popup.type === 'inline') {
                 setupInline(popup);
@@ -300,15 +424,22 @@
         var wrapper = document.querySelector('[data-leads-inline="' + config.id + '"]');
         if (!wrapper) return;
 
-        if (!allowed(config)) {
-            wrapper.parentNode.removeChild(wrapper);
-            return;
-        }
+        var drop = function () {
+            if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+        };
+        if (!allowed(config)) return drop();
 
-        var popup = wrapper.firstElementChild;
-        if (popup) attachForm(popup, config);
-        wrapper.hidden = false;
-        trackEvent(config.id, 'impression');
+        var reveal = function () {
+            var popup = wrapper.firstElementChild;
+            if (popup) attachForm(popup, config);
+            wrapper.hidden = false;
+            trackEvent(config.id, 'impression');
+        };
+        if (!needsVisitor(config)) return reveal();
+
+        askVisitor().then(function () {
+            if (visitorAllows(config.targeting, visitor)) reveal(); else drop();
+        });
     }
 
     function setupPopup(config) {
@@ -381,6 +512,10 @@
                     window.addEventListener('scroll', function () {
                         if (!exitTriggered && flicked(window.scrollY, Date.now())) exitNow();
                     }, { passive: true });
+                    // A visitor who never scrolls back up — a short page — gets it after the
+                    // popup's fallback, when it has one.
+                    var fallback = parseInt(config.triggerValue, 10);
+                    if (fallback > 0) setTimeout(exitNow, fallback * 1000);
                 }
                 break;
 
@@ -467,6 +602,19 @@
         // Already open, or the rules changed their mind since the page loaded (closed in
         // another tab, a click trigger pressed twice).
         if (popup.parentNode || !allowed(config)) return;
+
+        // Signed in, user groups, cart: wait for the server's answer. A no is kept, so a cart
+        // that changes later on this page (see cartChanged) can still bring it up.
+        if (needsVisitor(config)) {
+            if (visitor === null) {
+                askVisitor().then(function () { showPopup(popup, config); });
+                return;
+            }
+            if (!visitorAllows(config.targeting, visitor)) {
+                if (!refused.some(function (r) { return r.popup === popup; })) refused.push({ popup: popup, config: config });
+                return;
+            }
+        }
 
         // Not on top of the cookie banner: wait until it's gone, then show.
         if (popup._leadsHeld) return;

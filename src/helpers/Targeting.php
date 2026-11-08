@@ -29,12 +29,28 @@ namespace justinholtweb\leads\helpers;
  *                                   subdomains; `*` wildcards allowed)
  *     startDate           ?string   shown from this moment, ISO 8601 UTC (`2026-11-27T05:00:00Z`)
  *     endDate             ?string   …until this one
+ *     audience            string    all|guests|users (signed in)
+ *     userGroups          string[]  user group handles, any of which will do; implies `users`
+ *     cart                string    any|empty|notEmpty (Craft Commerce)
+ *     cartMin             ?float    the cart's item subtotal is at least this
+ *     cartBelow           ?float    …and below this — a free-shipping nudge
+ *     cartCategories      int[]     the cart holds a product related to one of these categories or
+ *                                   structure entries, or to one of their descendants
+ *
+ * The audience and cart rules are about the visitor too, and a cached page can't know them. The
+ * page script asks an uncached action (`leads/visitor`) for just what the page's rules `need`.
  */
 abstract class Targeting
 {
     public const DEVICES = ['desktop', 'tablet', 'mobile'];
     public const FREQUENCIES = ['every', 'session', 'once', 'days'];
     public const VISITORS = ['all', 'new', 'returning'];
+    public const AUDIENCES = ['all', 'guests', 'users'];
+    public const CARTS = ['any', 'empty', 'notEmpty'];
+
+    /** How many user groups, and how many categories, a popup may name. */
+    public const MAX_GROUPS = 50;
+    public const MAX_CATEGORIES = 100;
 
     /** How many patterns a list may hold, and how long each may be. */
     public const MAX_PATTERNS = 100;
@@ -60,6 +76,12 @@ abstract class Targeting
         'sources' => [],
         'startDate' => null,
         'endDate' => null,
+        'audience' => 'all',
+        'userGroups' => [],
+        'cart' => 'any',
+        'cartMin' => null,
+        'cartBelow' => null,
+        'cartCategories' => [],
     ];
 
     /**
@@ -123,6 +145,40 @@ abstract class Targeting
                 $out[$key] = $time === null ? trim($value) : gmdate(self::DATE_FORMAT, $time);
             }
         }
+
+        foreach (['audience', 'cart'] as $key) {
+            if (isset($rules[$key]) && is_string($rules[$key]) && $rules[$key] !== '') {
+                $out[$key] = $rules[$key];
+            }
+        }
+
+        // The editor's group checkboxes, ticked or not; handles are compared as Craft stores them.
+        $out['userGroups'] = array_values(array_unique(array_filter(
+            array_map(static fn($g) => is_string($g) ? trim($g) : '', is_array($rules['userGroups'] ?? null) ? $rules['userGroups'] : []),
+            static fn($g) => $g !== '',
+        )));
+        // Naming a group is naming signed-in visitors.
+        if ($out['userGroups'] !== [] && $out['audience'] === 'all') {
+            $out['audience'] = 'users';
+        }
+
+        foreach (['cartMin', 'cartBelow'] as $key) {
+            $value = $rules[$key] ?? null;
+            if (is_string($value)) {
+                $value = trim($value);
+            }
+            if ($value !== null && $value !== '') {
+                // Kept as given when it isn't a number, so `problems()` can say so.
+                $out[$key] = is_numeric($value) ? round((float)$value, 2) : $value;
+            }
+        }
+
+        // An element select posts IDs as strings, with an empty string when nothing is chosen.
+        $categories = is_array($rules['cartCategories'] ?? null) ? $rules['cartCategories'] : [];
+        $out['cartCategories'] = array_values(array_unique(array_map('intval', array_filter(
+            $categories,
+            static fn($id) => (is_int($id) || (is_string($id) && ctype_digit($id))) && (int)$id > 0,
+        ))));
 
         return $out;
     }
@@ -193,6 +249,41 @@ abstract class Targeting
         }
         if ($start !== null && $end !== null && $end <= $start) {
             $problems[] = 'The end date has to be after the start date.';
+        }
+
+        if (!in_array($rules['audience'], self::AUDIENCES, true)) {
+            $problems[] = 'Signed in must be anyone, guests or signed-in users.';
+        } elseif ($rules['audience'] === 'guests' && $rules['userGroups'] !== []) {
+            $problems[] = 'Guests aren’t in any user group. Choose signed-in users, or no groups.';
+        }
+        if (count($rules['userGroups']) > self::MAX_GROUPS) {
+            $problems[] = sprintf('Choose at most %d user groups.', self::MAX_GROUPS);
+        }
+        foreach ($rules['userGroups'] as $group) {
+            if (!preg_match('/^[A-Za-z][A-Za-z0-9_-]{0,254}$/', $group)) {
+                $problems[] = 'User groups are named by their handles.';
+                break;
+            }
+        }
+
+        if (!in_array($rules['cart'], self::CARTS, true)) {
+            $problems[] = 'The cart rule must be any, empty or not empty.';
+        }
+        foreach (['cartMin' => 'Subtotal at least', 'cartBelow' => 'Subtotal below'] as $key => $label) {
+            if ($rules[$key] !== null && (!is_float($rules[$key]) || $rules[$key] < 0 || $rules[$key] > 1e9)) {
+                $problems[] = sprintf('“%s” must be an amount of 0 or more.', $label);
+            }
+        }
+        $min = is_float($rules['cartMin']) ? $rules['cartMin'] : null;
+        $below = is_float($rules['cartBelow']) ? $rules['cartBelow'] : null;
+        if ($min !== null && $below !== null && $below <= $min) {
+            $problems[] = '“Subtotal below” has to be more than “Subtotal at least”.';
+        }
+        if (count($rules['cartCategories']) > self::MAX_CATEGORIES) {
+            $problems[] = sprintf('Choose at most %d categories.', self::MAX_CATEGORIES);
+        }
+        if ($rules['cart'] === 'empty' && ($rules['cartCategories'] !== [] || ($min !== null && $min > 0))) {
+            $problems[] = 'An empty cart has no products and a subtotal of 0. Choose “Any” or “Not empty” for the cart.';
         }
 
         return $problems;
@@ -285,7 +376,35 @@ abstract class Targeting
             // Milliseconds, as the page script's clock counts.
             'start' => $rules['startDate'] === null ? null : self::time($rules['startDate']) * 1000,
             'end' => $rules['endDate'] === null ? null : self::time($rules['endDate']) * 1000,
+            'audience' => $rules['audience'],
+            'groups' => array_values($rules['userGroups']),
+            'cart' => $rules['cart'],
+            'cartMin' => is_float($rules['cartMin']) ? $rules['cartMin'] : null,
+            'cartBelow' => is_float($rules['cartBelow']) ? $rules['cartBelow'] : null,
+            'cartIn' => array_values($rules['cartCategories']),
+            'needs' => self::needs($rules),
         ];
+    }
+
+    /**
+     * What the page script has to ask the server about the visitor before these rules can be
+     * decided: `user` (signed in, and their groups) and `cart`. Usually nothing, and then the page
+     * makes no request at all.
+     *
+     * @param array<string, mixed> $rules
+     * @return list<'user'|'cart'>
+     */
+    public static function needs(array $rules): array
+    {
+        $needs = [];
+        if ($rules['audience'] !== 'all' || $rules['userGroups'] !== []) {
+            $needs[] = 'user';
+        }
+        if ($rules['cart'] !== 'any' || $rules['cartMin'] !== null || $rules['cartBelow'] !== null || $rules['cartCategories'] !== []) {
+            $needs[] = 'cart';
+        }
+
+        return $needs;
     }
 
     /**

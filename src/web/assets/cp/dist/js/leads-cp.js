@@ -17,8 +17,8 @@
             var type = this.value;
             var currentTemplate = templateSelect.value;
 
-            // Suggest matching template
-            if (currentTemplate.indexOf('modal') !== -1 && type !== 'modal') {
+            // Suggest matching template (a site design is the editor's own choice: leave it)
+            if (currentTemplate.indexOf('site:') !== 0 && currentTemplate.indexOf('modal') !== -1 && type !== 'modal') {
                 var prefix = currentTemplate.split('-')[0];
                 var newTemplate = prefix + '-' + (type === 'slidein' ? 'slidein' : (type === 'bar' ? 'bar' : 'inline'));
                 // Check if option exists

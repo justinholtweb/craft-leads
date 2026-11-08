@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+### Added
+
+- **Signed-in and user-group targeting.** Show a popup to guests only, to signed-in users only, or to users in particular groups. ([#6](https://github.com/justinholtweb/craft-leads/issues/6))
+- **Cart targeting, with Craft Commerce.** Show a popup when the cart is empty or not, when its subtotal is at least an amount, or below one (a free-shipping nudge), or when it holds a product in particular categories, or entries in a structure, counting the ones under them. If your site adds to the cart by Ajax, fire `leads:cart-changed` on `window` and popups the cart rule turned down on that page are checked again. ([#6](https://github.com/justinholtweb/craft-leads/issues/6))
+- These rules hold behind full-page caches such as Blitz. A cached page can't know who's visiting, so when a popup on it has such a rule, the page script makes one request to a new action, `actions/leads/visitor`, asking only what those rules need. Actions are never cached, and this one also sends `no-store, private`. It never creates anything: the cart is read with Commerce's `peekCart()`, so a guest without a cart gets no cart, cookie or session. A page with no such rule makes no request.
+- **Designs from your own templates.** Each template in `templates/_leads/` (**Settings → Designs**) can be picked per popup in the **Template** menu, next to the built-in designs. A design gets the popup, a ready-made `form`, its `fields`, `consent` and `success` text. Saving a popup renders its design once, so a Twig error shows in the editor instead of on the site. ([#6](https://github.com/justinholtweb/craft-leads/issues/6))
+- **A fallback for exit intent on phones and tablets.** Visitors on a short page may never scroll back up. Give an exit-intent popup a fallback and they see it after that many seconds instead. Each popup opts in; there's no fallback by default. ([#6](https://github.com/justinholtweb/craft-leads/issues/6))
+
+### Changed
+
+- An exit-intent popup's `triggerValue` is now its fallback in seconds on phones and tablets. It wasn't used before, but often still held the delay from the popup's first trigger type, so the update clears it on existing exit-intent popups and none of them starts showing on a timer.
+- `Popup::$triggerValue` is now blank by default instead of `'3'`, so a popup made in code with an exit-intent trigger has no fallback unless it's given one. Blank already meant 3 seconds for the time trigger, 50% for scroll and 30 seconds for idle, so nothing else changes. The editor still offers a new popup 3 seconds.
+
+### Security
+
+- A popup's `templateKey` went into a template path without being checked. It now has to be one of the built-in designs or a template in the designs folder. A popup saves only with one of those, and any other stored value renders the default design.
+
 ## 5.3.0 - 2026-10-25
 ### Added
 

@@ -150,6 +150,7 @@ check('a save stores the rules in their normalized shape', function() use ($save
         'devices' => ['desktop', 'tablet'], 'frequency' => 'days', 'frequencyDays' => 14, 'minPageViews' => 2,
         'visitor' => 'returning', 'hideAfterConversion' => false, 'dismissDays' => 3,
         'sources' => [], 'startDate' => null, 'endDate' => null,
+        'audience' => 'all', 'userGroups' => [], 'cart' => 'any', 'cartMin' => null, 'cartBelow' => null, 'cartCategories' => [],
     ];
     ksort($rules);
     ksort($expected);
@@ -266,9 +267,10 @@ check('the browser gets the device and frequency rules, and not the page pattern
         'devices' => ['mobile'], 'frequency' => 'session', 'frequencyDays' => 7, 'minPageViews' => 3,
         'visitor' => 'new', 'hideAfterConversion' => true, 'dismissDays' => 7,
         'sources' => [], 'start' => null, 'end' => null,
+        'audience' => 'all', 'groups' => [], 'cart' => 'any', 'cartMin' => null, 'cartBelow' => null, 'cartIn' => [], 'needs' => [],
     ];
 
-    return ($config['targeting'] ?? null) === $expected ?: json_encode($config['targeting'] ?? null);
+    return ($config['targeting'] ?? null) === $expected && array_key_exists('visitorUrl', $config ?? []) && $config['visitorUrl'] === null ?: json_encode($config['targeting'] ?? null);
 });
 
 check('the same HTML goes to a phone and a desktop — the device is decided in the browser, so caches are safe', function() use ($anon, $page, $configs, $ours) {

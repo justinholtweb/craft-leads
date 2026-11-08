@@ -168,4 +168,71 @@ final class TargetingTest extends TestCase
         $this->assertNull(Targeting::forClient($open)['end']);
         $this->assertNull(Targeting::scheduleState(Targeting::normalize([]), time()));
     }
+
+    /**
+     * Audience and cart rules as the editor posts them: a select, group checkboxes, number inputs
+     * and two element selects sharing one name.
+     */
+    public function testAudienceAndCartRulesFromTheEditor(): void
+    {
+        $rules = Targeting::normalize([
+            'audience' => 'all',
+            'userGroups' => ['', 'wholesale', 'wholesale'],
+            'cart' => 'notEmpty',
+            'cartMin' => '',
+            'cartBelow' => '50',
+            'cartCategories' => ['', '12', '7', '12'],
+        ]);
+
+        $this->assertSame('users', $rules['audience'], 'naming a group is naming signed-in users');
+        $this->assertSame(['wholesale'], $rules['userGroups']);
+        $this->assertNull($rules['cartMin']);
+        $this->assertSame(50.0, $rules['cartBelow']);
+        $this->assertSame([12, 7], $rules['cartCategories']);
+        $this->assertSame([], Targeting::problems($rules));
+        $this->assertSame($rules, Targeting::normalize($rules), 'normalizing twice changes nothing');
+
+        $client = Targeting::forClient($rules);
+        $this->assertSame(['user', 'cart'], $client['needs']);
+        $this->assertSame(['wholesale'], $client['groups']);
+        $this->assertSame([12, 7], $client['cartIn']);
+        $this->assertSame(50.0, $client['cartBelow']);
+    }
+
+    /** No audience or cart rule: the page asks the server nothing. */
+    public function testWithoutThoseRulesNothingIsAsked(): void
+    {
+        $this->assertSame([], Targeting::needs(Targeting::normalize([])));
+        $this->assertSame([], Targeting::forClient(Targeting::normalize(['devices' => ['mobile']]))['needs']);
+        $this->assertSame(['user'], Targeting::needs(Targeting::normalize(['audience' => 'guests'])));
+        $this->assertSame(['cart'], Targeting::needs(Targeting::normalize(['cartMin' => '10'])));
+    }
+
+    /**
+     * @dataProvider impossibleAudienceAndCartRules
+     * @param array<string, mixed> $posted
+     */
+    public function testImpossibleAudienceAndCartRulesAreRefused(array $posted, string $says): void
+    {
+        $problems = Targeting::problems(Targeting::normalize($posted));
+
+        $this->assertNotSame([], $problems);
+        $this->assertStringContainsString($says, implode(' ', $problems));
+    }
+
+    /** @return array<string, array{array<string, mixed>, string}> */
+    public static function impossibleAudienceAndCartRules(): array
+    {
+        return [
+            'guests in a group' => [['audience' => 'guests', 'userGroups' => ['vip']], 'Guests aren’t in any user group'],
+            'an unknown audience' => [['audience' => 'robots'], 'Signed in must be'],
+            'a group that is not a handle' => [['userGroups' => ['VIP members']], 'handles'],
+            'an unknown cart state' => [['cart' => 'full'], 'cart rule'],
+            'a subtotal that is not a number' => [['cartMin' => 'ten'], 'Subtotal at least'],
+            'a negative threshold' => [['cartBelow' => '-5'], 'Subtotal below'],
+            'below at or under the minimum' => [['cartMin' => '50', 'cartBelow' => '50'], 'has to be more than'],
+            'an empty cart holding a product' => [['cart' => 'empty', 'cartCategories' => ['3']], 'empty cart'],
+            'an empty cart with a minimum' => [['cart' => 'empty', 'cartMin' => '1'], 'empty cart'],
+        ];
+    }
 }

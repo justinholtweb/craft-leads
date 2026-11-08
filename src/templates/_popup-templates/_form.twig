@@ -1,0 +1,10 @@
+{#- The sign-up form a site design gets as `form`: the fields, the consent box and the button,
+    wired for the page script (`data-leads-form`, the popup ID, `.leads-btn`). -#}
+<form class="leads-form" data-leads-form>
+    <input type="hidden" name="popupId" value="{{ popup.id }}">
+    {% for field in fields %}
+        <input type="{{ field.type ?? 'text' }}" name="{{ field.name }}" placeholder="{{ field.placeholder ?? '' }}" {% if field.required ?? false %}required{% endif %} class="leads-input">
+    {% endfor %}
+    {% include 'leads/_popup-templates/_consent' %}
+    <button type="submit" class="leads-btn"{% if popup.buttonColor %} style="background-color: {{ popup.buttonColor }}"{% endif %}>{{ popup.buttonText ?: 'Subscribe'|t('leads') }}</button>
+</form>

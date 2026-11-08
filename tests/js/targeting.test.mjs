@@ -74,6 +74,19 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
                 getComputedStyle: () => ({ visibility: 'visible', display: 'block', opacity: '1' }),
                 location: { href: 'https://example.com/' + (page.search || ''), search: page.search || '', hostname: 'example.com' },
             };
+            // `page.visitor`: what the visitor action answers (a function is asked each time), or
+            // a status code for a refusal. Without it the page has no fetch at all.
+            const requests = [];
+            if (page.visitor !== undefined) {
+                window.fetch = (url) => {
+                    requests.push(url);
+                    // A function may return a promise, to answer later than a request after it.
+                    const answer = typeof page.visitor === 'function' ? page.visitor() : page.visitor;
+                    return Promise.resolve(answer).then((a) => typeof a === 'number'
+                        ? { ok: false, status: a, json: async () => ({}) }
+                        : { ok: true, status: 200, json: async () => a });
+                };
+            }
             const context = {
                 window, document, navigator: window.navigator, JSON, Date, Math, String, RegExp,
                 setTimeout: (fn) => timers.push(fn) , clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1] = () => {}; },
@@ -92,13 +105,19 @@ function browser({ ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', stora
             /** Run the timers set so far (and only those). */
             const tick = () => timers.splice(0).forEach((fn) => fn());
 
-            return { shown, events, scrollTo, tick, targeting: window.LeadsTargeting };
+            /** Fire a window event, as the site's own script would. */
+            const dispatch = (type) => listeners.filter((l) => l.type === type).forEach((l) => l.fn());
+
+            return { shown, events, scrollTo, tick, dispatch, requests, targeting: window.LeadsTargeting };
         },
     };
 }
 
 const popup = (id, targeting = {}) => ({ id, type: 'modal', trigger: 'time', triggerValue: '1', html: `popup-${id}`, targeting });
-const { deviceType, allows, exitScroll, fromSource, arrival } = browser().load().targeting;
+const { deviceType, allows, visitorAllows, visitorQuery, exitScroll, fromSource, arrival } = browser().load().targeting;
+
+/** Let the fake fetch's promises settle. */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 test('device type', () => {
     const cases = [
@@ -333,4 +352,114 @@ test('a banner still hidden at load (Toss decides asynchronously) gets a moment 
     page.tick();
     page.tick();
     assert.deepEqual(page.shown, ['popup-24']);
+});
+
+test('exit intent on a phone falls back to the popup’s delay, when it has one', () => {
+    const phone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148';
+    const withFallback = browser({ ua: phone }).load([{ ...exitPopup(40), triggerValue: '20' }]);
+    assert.deepEqual(withFallback.shown, ['popup-40'], 'never scrolled back up, shown after the fallback');
+
+    const without = browser({ ua: phone }).load([{ ...exitPopup(41), triggerValue: null }]);
+    assert.deepEqual(without.shown, [], 'no fallback: only the flick');
+
+    const desktop = browser().load([{ ...exitPopup(42), triggerValue: '20' }]);
+    assert.deepEqual(desktop.shown, [], 'a desktop has a mouse to leave with: no timer');
+});
+
+test('audience and cart rules', () => {
+    const guest = { user: { guest: true, groups: [] } };
+    const member = { user: { guest: false, groups: ['wholesale'] } };
+    const user = (t) => ({ needs: ['user'], ...t });
+    const cart = (t) => ({ needs: ['cart'], cart: 'any', ...t });
+    const c = (over) => ({ cart: { empty: false, subtotal: 40, qty: 2, in: [], ...over } });
+
+    assert.equal(visitorAllows({}, undefined), true, 'no such rules, nothing to ask');
+    assert.equal(visitorAllows(user({ audience: 'guests' }), guest), true);
+    assert.equal(visitorAllows(user({ audience: 'guests' }), member), false);
+    assert.equal(visitorAllows(user({ audience: 'users' }), guest), false);
+    assert.equal(visitorAllows(user({ audience: 'users', groups: ['wholesale', 'vip'] }), member), true, 'any of the groups');
+    assert.equal(visitorAllows(user({ audience: 'users', groups: ['vip'] }), member), false);
+    assert.equal(visitorAllows(user({ audience: 'guests' }), {}), false, 'no answer is a no');
+
+    assert.equal(visitorAllows(cart({ cart: 'empty' }), c({ empty: true, subtotal: 0 })), true);
+    assert.equal(visitorAllows(cart({ cart: 'empty' }), c()), false);
+    assert.equal(visitorAllows(cart({ cart: 'notEmpty' }), c({ empty: true, subtotal: 0 })), false);
+    assert.equal(visitorAllows(cart({ cartMin: 40 }), c()), true, 'at least: inclusive');
+    assert.equal(visitorAllows(cart({ cartMin: 40.01 }), c()), false);
+    assert.equal(visitorAllows(cart({ cartBelow: 50 }), c()), true, 'a free-shipping nudge at 50');
+    assert.equal(visitorAllows(cart({ cartBelow: 40 }), c()), false, 'below: exclusive');
+    assert.equal(visitorAllows(cart({ cartIn: [7, 9] }), c({ in: [9] })), true);
+    assert.equal(visitorAllows(cart({ cartIn: [7] }), c({ in: [] })), false);
+    assert.equal(visitorAllows(cart({ cart: 'empty' }), {}), false, 'no answer is a no');
+});
+
+test('the visitor query asks once, for what the page needs', () => {
+    assert.equal(visitorQuery([popup(1), popup(2)]), null, 'nothing needs it');
+    const u = { ...popup(3, { needs: ['user'] }), visitorUrl: '/index.php?p=actions/leads/visitor' };
+    const k = { ...popup(4, { needs: ['cart'], cartIn: [9, 3] }), visitorUrl: '/index.php?p=actions/leads/visitor' };
+    const k2 = { ...popup(5, { needs: ['cart'], cartIn: [3] }), visitorUrl: '/index.php?p=actions/leads/visitor' };
+    assert.equal(visitorQuery([u, k, k2]), '/index.php?p=actions/leads/visitor&need=cart,user&in=3,9');
+    assert.equal(visitorQuery([{ ...u, visitorUrl: '/actions/leads/visitor' }]), '/actions/leads/visitor?need=user');
+});
+
+const nudge = (id, below) => ({ ...popup(id, { needs: ['cart'], cart: 'notEmpty', cartBelow: below }), visitorUrl: '/actions/leads/visitor' });
+
+test('a page without audience or cart rules asks the server nothing', async () => {
+    const page = browser().load([popup(43)], { visitor: { cart: { empty: true } } });
+    await settle();
+    assert.deepEqual(page.requests, []);
+    assert.deepEqual(page.shown, ['popup-43']);
+});
+
+test('a cart rule waits for the answer, then shows or not', async () => {
+    const yes = browser().load([nudge(44, 50)], { visitor: { cart: { empty: false, subtotal: 30, in: [] } } });
+    assert.deepEqual(yes.shown, [], 'not before the answer');
+    await settle();
+    assert.deepEqual(yes.shown, ['popup-44']);
+    assert.equal(yes.requests.length, 1, 'one request');
+
+    const no = browser().load([nudge(45, 50)], { visitor: { cart: { empty: true, subtotal: 0, in: [] } } });
+    await settle();
+    assert.deepEqual(no.shown, []);
+
+    const refused = browser().load([nudge(46, 50)], { visitor: 429 });
+    await settle();
+    assert.deepEqual(refused.shown, [], 'turned away: no answer, no popup');
+});
+
+test('after leads:cart-changed, a refused popup is checked again', async () => {
+    let cart = { empty: true, subtotal: 0, in: [] };
+    const page = browser().load([nudge(47, 50)], { visitor: () => ({ cart }) });
+    await settle();
+    assert.deepEqual(page.shown, [], 'empty cart');
+
+    cart = { empty: false, subtotal: 20, in: [] };
+    page.dispatch('leads:cart-changed');
+    await settle();
+    assert.deepEqual(page.shown, ['popup-47'], 'added to cart by Ajax');
+    assert.equal(page.requests.length, 2);
+});
+
+test('an answer that comes back after a fresher one is ignored', async () => {
+    let late;
+    const answers = [
+        new Promise((resolve) => { late = resolve; }),        // the page-load request, held back
+        { cart: { empty: false, subtotal: 20, in: [] } },     // after leads:cart-changed
+    ];
+    const page = browser().load([nudge(49, 50)], { visitor: () => answers.shift() });
+    page.dispatch('leads:cart-changed');
+    await settle();
+    late({ cart: { empty: true, subtotal: 0, in: [] } });     // the old cart, arriving last
+    await settle();
+    assert.deepEqual(page.shown, ['popup-49'], 'the fresh cart decides');
+    assert.equal(page.requests.length, 2);
+});
+
+test('a guests-only popup stays off a signed-in visitor’s page', async () => {
+    const config = { ...popup(48, { needs: ['user'], audience: 'guests' }), visitorUrl: '/actions/leads/visitor' };
+    const member = browser().load([config], { visitor: { user: { guest: false, groups: [] } } });
+    const guest = browser().load([config], { visitor: { user: { guest: true, groups: [] } } });
+    await settle();
+    assert.deepEqual(member.shown, []);
+    assert.deepEqual(guest.shown, ['popup-48']);
 });

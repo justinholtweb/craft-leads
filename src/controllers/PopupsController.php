@@ -3,6 +3,8 @@
 namespace justinholtweb\leads\controllers;
 
 use Craft;
+use craft\elements\Category;
+use craft\elements\Entry;
 use craft\helpers\DateTimeHelper;
 use craft\web\Controller;
 use justinholtweb\leads\elements\Popup;
@@ -11,9 +13,11 @@ use justinholtweb\leads\enums\PopupPosition;
 use justinholtweb\leads\enums\PopupStatus;
 use justinholtweb\leads\enums\PopupType;
 use justinholtweb\leads\enums\TriggerType;
+use justinholtweb\leads\helpers\CartBridge;
 use justinholtweb\leads\helpers\Optin;
 use justinholtweb\leads\helpers\Targeting;
 use justinholtweb\leads\Plugin;
+use justinholtweb\leads\services\Renderer;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
@@ -51,6 +55,9 @@ class PopupsController extends Controller
                 $settings = Plugin::getInstance()->getSettings();
                 $popup->buttonColor = $settings->defaultButtonColor;
                 $popup->backgroundColor = $settings->defaultBackgroundColor;
+                // The time trigger's delay, as before; it isn't the element's default, so a popup
+                // made in code with an exit trigger gets no fallback it didn't ask for.
+                $popup->triggerValue = '3';
             }
         }
 
@@ -87,16 +94,50 @@ class PopupsController extends Controller
             ], IntegrationProvider::cases()),
         ];
 
-        $templateOptions = [
-            ['label' => 'Clean Modal', 'value' => 'clean-modal'],
-            ['label' => 'Clean Slide-in', 'value' => 'clean-slidein'],
-            ['label' => 'Clean Bar', 'value' => 'clean-bar'],
-            ['label' => 'Bold Modal', 'value' => 'bold-modal'],
-            ['label' => 'Bold Slide-in', 'value' => 'bold-slidein'],
-            ['label' => 'Bold Bar', 'value' => 'bold-bar'],
-            ['label' => 'Minimal Modal', 'value' => 'minimal-modal'],
-            ['label' => 'Minimal Inline', 'value' => 'minimal-inline'],
+        // The built-in designs, then the site's own, grouped. A stored design that has gone from
+        // the folder stays listed, so saving doesn't quietly swap it; validation then says so.
+        $renderer = Plugin::getInstance()->renderer;
+        $templateOptions = [];
+        foreach (Renderer::BUILT_IN as $value => $label) {
+            $templateOptions[] = ['label' => Craft::t('leads', $label), 'value' => $value];
+        }
+        $siteDesigns = $renderer->getSiteDesigns();
+        $current = (string)$popup->templateKey;
+        if (str_starts_with($current, Renderer::SITE_PREFIX) && !isset($siteDesigns[substr($current, strlen(Renderer::SITE_PREFIX))])) {
+            $siteDesigns[substr($current, strlen(Renderer::SITE_PREFIX))] = Craft::t('leads', '{name} (missing)', ['name' => substr($current, strlen(Renderer::SITE_PREFIX))]);
+        }
+        if ($siteDesigns) {
+            $templateOptions = [
+                ['optgroup' => Craft::t('leads', 'Built-in')],
+                ...$templateOptions,
+                ['optgroup' => Craft::t('leads', 'Site templates')],
+            ];
+            foreach ($siteDesigns as $name => $label) {
+                $templateOptions[] = ['label' => $label, 'value' => Renderer::SITE_PREFIX . $name];
+            }
+        }
+
+        $audienceOptions = [
+            ['label' => Craft::t('leads', 'Anyone'), 'value' => 'all'],
+            ['label' => Craft::t('leads', 'Guests'), 'value' => 'guests'],
+            ['label' => Craft::t('leads', 'Signed-in users'), 'value' => 'users'],
         ];
+
+        $groupOptions = array_map(static fn($group) => [
+            'label' => Craft::t('site', $group->name),
+            'value' => $group->handle,
+        ], Craft::$app->getUserGroups()->getAllGroups());
+
+        $cartOptions = [
+            ['label' => Craft::t('leads', 'Any'), 'value' => 'any'],
+            ['label' => Craft::t('leads', 'Empty'), 'value' => 'empty'],
+            ['label' => Craft::t('leads', 'Not empty'), 'value' => 'notEmpty'],
+        ];
+
+        // The categories and entries a cart rule names, for the element selects.
+        $cartCategoryIds = $popup->getTargeting()['cartCategories'];
+        $cartCategories = $cartCategoryIds ? Category::find()->id($cartCategoryIds)->status(null)->all() : [];
+        $cartEntries = $cartCategoryIds ? Entry::find()->id($cartCategoryIds)->status(null)->all() : [];
 
         $deviceOptions = [
             ['label' => Craft::t('leads', 'Desktop'), 'value' => 'desktop'],
@@ -133,6 +174,13 @@ class PopupsController extends Controller
             'statusOptions' => $statusOptions,
             'integrationOptions' => $integrationOptions,
             'templateOptions' => $templateOptions,
+            'designsFolder' => Plugin::getInstance()->getSettings()->getDesignsFolder(),
+            'audienceOptions' => $audienceOptions,
+            'groupOptions' => $groupOptions,
+            'cartOptions' => $cartOptions,
+            'commerceActive' => CartBridge::commerceIsActive(),
+            'cartCategories' => $cartCategories,
+            'cartEntries' => $cartEntries,
             'deviceOptions' => $deviceOptions,
             'frequencyOptions' => $frequencyOptions,
             'visitorOptions' => $visitorOptions,
@@ -161,7 +209,11 @@ class PopupsController extends Controller
         $popup->title = $request->getBodyParam('title');
         $popup->popupType = $request->getBodyParam('popupType', 'modal');
         $popup->triggerType = $request->getBodyParam('triggerType', 'time');
-        $popup->triggerValue = $request->getBodyParam('triggerValue');
+        // An exit-intent popup has its own field: the fallback on phones and tablets, blank for none.
+        // The general one still holds whatever the previous trigger type had in it.
+        $popup->triggerValue = $popup->triggerType === 'exit'
+            ? (trim((string)$request->getBodyParam('exitFallback', '')) ?: null)
+            : $request->getBodyParam('triggerValue');
         $popup->templateKey = $request->getBodyParam('templateKey');
         $popup->heading = $request->getBodyParam('heading');
         $popup->bodyText = $request->getBodyParam('bodyText');

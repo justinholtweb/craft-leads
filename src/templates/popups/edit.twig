@@ -54,10 +54,14 @@
             <div class="flex-grow">
                 {{ forms.selectField({
                     label: 'Template'|t('leads'),
+                    instructions: designsFolder
+                        ? 'Your own designs are the templates in `templates/{folder}`.'|t('leads', { folder: designsFolder })
+                        : null,
                     id: 'templateKey',
                     name: 'templateKey',
                     value: popup.templateKey,
                     options: templateOptions,
+                    errors: popup.getErrors('templateKey'),
                 }) }}
             </div>
             <div class="flex-grow">
@@ -97,15 +101,40 @@
                 }) }}
             </div>
             <div class="flex-grow">
-                {{ forms.textField({
-                    label: 'Trigger Value'|t('leads'),
-                    instructions: 'Seconds for time delay, percentage for scroll, CSS selector for click, seconds without input for idle (30 if blank), CSS selector of the element for element in view.'|t('leads'),
-                    id: 'triggerValue',
-                    name: 'triggerValue',
-                    value: popup.triggerValue,
-                }) }}
+                <div id="leads-trigger-value"{% if popup.triggerType == 'exit' %} class="hidden"{% endif %}>
+                    {{ forms.textField({
+                        label: 'Trigger Value'|t('leads'),
+                        instructions: 'Seconds for time delay, percentage for scroll, CSS selector for click, seconds without input for idle (30 if blank), CSS selector of the element for element in view.'|t('leads'),
+                        id: 'triggerValue',
+                        name: 'triggerValue',
+                        value: popup.triggerType != 'exit' ? popup.triggerValue : '',
+                        errors: popup.triggerType != 'exit' ? popup.getErrors('triggerValue') : [],
+                    }) }}
+                </div>
+                <div id="leads-trigger-exit"{% if popup.triggerType != 'exit' %} class="hidden"{% endif %}>
+                    {{ forms.textField({
+                        label: 'Fallback on phones and tablets'|t('leads'),
+                        instructions: 'There, exit intent is a quick scroll back up. Visitors on a short page may never do that: show the popup after this many seconds instead. Leave blank for no fallback.'|t('leads'),
+                        id: 'exitFallback',
+                        name: 'exitFallback',
+                        value: popup.triggerType == 'exit' ? popup.triggerValue : '',
+                        type: 'number',
+                        min: 1,
+                        max: 600,
+                        size: 5,
+                        placeholder: '20',
+                        errors: popup.triggerType == 'exit' ? popup.getErrors('triggerValue') : [],
+                    }) }}
+                </div>
             </div>
         </div>
+        {% js %}
+        document.getElementById('triggerType')?.addEventListener('change', function(e) {
+            var exit = e.currentTarget.value === 'exit';
+            document.getElementById('leads-trigger-value').classList.toggle('hidden', exit);
+            document.getElementById('leads-trigger-exit').classList.toggle('hidden', !exit);
+        });
+        {% endjs %}
 
         <hr>
 
@@ -439,6 +468,103 @@
             rows: 3,
             class: 'code',
         }) }}
+
+        <h3>{{ 'Signed-in users'|t('leads') }}</h3>
+
+        <div class="flex">
+            <div class="flex-grow">
+                {{ forms.selectField({
+                    label: 'Signed in'|t('leads'),
+                    instructions: 'Asked of the server by the page script, so it holds on cached pages.'|t('leads'),
+                    id: 'targetingAudience',
+                    name: 'targetingRules[audience]',
+                    value: targeting.audience,
+                    options: audienceOptions,
+                }) }}
+            </div>
+            <div class="flex-grow">
+                {% if groupOptions %}
+                    {{ forms.checkboxSelectField({
+                        label: 'User groups'|t('leads'),
+                        instructions: 'Only signed-in users in any of these groups. None ticked for any user.'|t('leads'),
+                        id: 'targetingUserGroups',
+                        name: 'targetingRules[userGroups]',
+                        options: groupOptions,
+                        values: targeting.userGroups,
+                    }) }}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if commerceActive or targeting.cart != 'any' or targeting.cartMin is not null or targeting.cartBelow is not null or targeting.cartCategories %}
+            <h3>{{ 'Cart'|t('leads') }}</h3>
+            {% if not commerceActive %}
+                <p class="warning with-icon">{{ 'Cart rules need Craft Commerce.'|t('leads') }}</p>
+            {% endif %}
+
+            <div class="flex">
+                <div class="flex-grow">
+                    {{ forms.selectField({
+                        label: 'Cart'|t('leads'),
+                        id: 'targetingCart',
+                        name: 'targetingRules[cart]',
+                        value: targeting.cart,
+                        options: cartOptions,
+                    }) }}
+                </div>
+                <div class="flex-grow">
+                    {{ forms.textField({
+                        label: 'Subtotal at least'|t('leads'),
+                        instructions: 'The cart’s items, before discounts and shipping.'|t('leads'),
+                        id: 'targetingCartMin',
+                        name: 'targetingRules[cartMin]',
+                        value: targeting.cartMin,
+                        type: 'number',
+                        min: 0,
+                        step: 'any',
+                        size: 8,
+                    }) }}
+                </div>
+                <div class="flex-grow">
+                    {{ forms.textField({
+                        label: 'Subtotal below'|t('leads'),
+                        instructions: 'For a free-shipping nudge: your threshold.'|t('leads'),
+                        id: 'targetingCartBelow',
+                        name: 'targetingRules[cartBelow]',
+                        value: targeting.cartBelow,
+                        type: 'number',
+                        min: 0,
+                        step: 'any',
+                        size: 8,
+                    }) }}
+                </div>
+            </div>
+
+            <div class="flex">
+                <div class="flex-grow">
+                    {{ forms.elementSelectField({
+                        label: 'Holds a product in these categories'|t('leads'),
+                        instructions: 'Any of them, or a category under one.'|t('leads'),
+                        id: 'targetingCartCategories',
+                        name: 'targetingRules[cartCategories]',
+                        elementType: 'craft\\elements\\Category',
+                        elements: cartCategories,
+                    }) }}
+                </div>
+                <div class="flex-grow">
+                    {{ forms.elementSelectField({
+                        label: '…or related to these entries'|t('leads'),
+                        instructions: 'For a catalogue organised with entries in a structure; an entry under one counts too.'|t('leads'),
+                        id: 'targetingCartEntries',
+                        name: 'targetingRules[cartCategories]',
+                        elementType: 'craft\\elements\\Entry',
+                        elements: cartEntries,
+                    }) }}
+                </div>
+            </div>
+
+            <p class="light">{{ 'After an add to cart by Ajax, fire {code} and popups whose trigger has already fired are checked again.'|t('leads', { code: '<code>window.dispatchEvent(new Event(\'leads:cart-changed\'))</code>' })|raw }}</p>
+        {% endif %}
     </div>
 
     {% if not isNew %}

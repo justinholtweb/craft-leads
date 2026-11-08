@@ -104,6 +104,21 @@
 
         <hr>
 
+        <h2>{{ 'Designs'|t('leads') }}</h2>
+
+        {{ forms.textField({
+            label: 'Designs folder'|t('leads'),
+            instructions: 'A folder in your site’s templates. Each template directly in it (but not one whose name starts with `_`) can be picked as a popup’s design, next to the built-in ones. Leave blank to offer only the built-in designs.'|t('leads'),
+            id: 'designsFolder',
+            name: 'settings[designsFolder]',
+            value: settings.designsFolder,
+            class: 'code',
+            placeholder: '_leads',
+            errors: settings.getErrors('designsFolder'),
+        }) }}
+
+        <hr>
+
         <h2>{{ 'Double Opt-in'|t('leads') }}</h2>
 
         <p class="light">{{ 'Used by popups whose double opt-in is set to “Leads emails a confirmation link”. Sent with Craft’s email settings.'|t('leads') }}</p>

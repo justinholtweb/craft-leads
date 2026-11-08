@@ -20,10 +20,10 @@ php craft plugin/install leads
 |---|---|
 | Popup types | Modal, slide-in, notification bar, inline form |
 | Triggers | Time delay, scroll percentage, exit intent (phones too), click, idle, element in view |
-| Templates | 8 built-in designs (clean, bold, minimal) |
+| Designs | 8 built-in designs (clean, bold, minimal), or your own site templates, picked per popup |
 | Integrations | Mailchimp, ConvertKit, webhook |
 | Analytics | Impressions, conversions, conversion rates |
-| Targeting | Page URLs, start and end dates, device type, traffic source (UTM or referrer), visitor frequency, new/returning visitors, page-view minimums |
+| Targeting | Page URLs, start and end dates, device type, traffic source (UTM or referrer), visitor frequency, new/returning visitors, page-view minimums, signed-in users and user groups, Craft Commerce cart (empty, subtotal, categories) |
 | Cookie banners | Modals and slide-ins wait while the site's cookie banner is on screen |
 | Consent | Optional or required consent checkbox, with the wording stored on each submission |
 | Double opt-in | Leads emails a confirmation link, or Mailchimp/ConvertKit confirm themselves |
@@ -47,6 +47,8 @@ return [
     'trackingPerMinute' => 60,
     // Cookie banners to wait for, one CSS selector per line ('' = never wait). See "Cookie banners".
     'consentBannerSelectors' => "[data-toss-consent-root]\n#CybotCookiebotDialog\n…",
+    // The folder in templates/ whose templates are offered as designs ('' = built-in only). See "Your own designs".
+    'designsFolder' => '_leads',
     // Double opt-in (see "Consent & Double Opt-in")
     'confirmationExpiryHours' => 48,
     'confirmationSubject' => 'Please confirm your subscription to {siteName}',
@@ -113,7 +115,7 @@ Access popup data via the `craft.leads` variable:
 |---|---|---|
 | `time` | Seconds (e.g., `3`) | Show after N seconds |
 | `scroll` | Percentage (e.g., `50`) | Show when user scrolls past N% |
-| `exit` | — | Show on exit intent: the mouse leaves the top of the window, or on phones and tablets, a quick scroll back up after reading at least 300px down |
+| `exit` | Fallback seconds on phones and tablets (blank for none) | Show on exit intent: the mouse leaves the top of the window, or on phones and tablets, a quick scroll back up after reading at least 300px down. Visitors on a short page may never scroll back up; give the popup a **fallback** and they see it after that many seconds instead |
 | `click` | CSS selector (e.g., `.cta-btn`) | Show when element is clicked |
 | `idle` | Seconds (e.g., `30`, the default) | Show after N seconds with no mouse, keyboard, scroll or touch input |
 | `view` | CSS selector (e.g., `#pricing`) | Show when a matching element scrolls a fifth of the way up the screen |
@@ -133,12 +135,25 @@ Each popup's **Targeting Rules** are set in its editor:
 | Days hidden after closing | How long a visitor who closes it goes without seeing it (default 1; `0` = no pause) |
 | Hide after signing up | Never show it again once the visitor has submitted it (default on) |
 | Traffic source | One per line, any of which will do: a UTM parameter (`utm_campaign=spring-sale`) or a referring site (`google.com`, which covers its subdomains). `*` matches anything. Blank = every visitor |
+| Signed in | Anyone, guests, or signed-in users |
+| User groups | Signed-in users in any of these groups |
+| Cart | Any, empty or not empty (Craft Commerce) |
+| Subtotal at least / below | The cart's item subtotal, before discounts and shipping. "Below" is for a free-shipping nudge: set it to your threshold |
+| Holds a product in | Categories, or entries in a structure: the cart has a product (or variant) related to one, or to one under it |
 
 Page rules are applied on the server — the URL is part of every full-page cache key. Everything about the visitor is decided by the page script in their browser: the device from User-Agent Client Hints or the user agent, and what they've seen from `localStorage` (key `leads`, or a `leads` cookie where storage is blocked) plus a `leads_session` session cookie. So a page served from Blitz, a CDN or any other full-page cache shows each visitor the right popups. While a live popup uses a page-view, visitor or traffic-source rule, the script loads on every front-end page so those pages count.
 
 **Dates** are checked on the server and again in the browser, so a cached page stops showing a popup when it ends. A page cached *before* a popup starts won't carry it until the page is cached again — have your cache refresh on a schedule (Blitz can) if a campaign has to start on the minute.
 
 **Traffic source** comes from the page a visit starts on: its `utm_*` parameters and, when it was reached from another site, the referring host. A later page with `utm_*` parameters replaces it; anything else keeps it, so a visitor coming back from a payment provider still counts as the campaign that brought them. It's kept for the visit in a `leads_source` session cookie.
+
+**Signed-in, user-group and cart rules** can't be read from a cached page either, and can't be kept in the browser. When a popup on the page has one, the page script makes one request to an action, `actions/leads/visitor`, asking only what those rules need. Full-page caches such as Blitz never cache actions, and it answers `Cache-Control: no-store, private` besides. It creates nothing: the cart is looked at with Commerce's `peekCart()` (5.7+), so a guest without a cart gets no cart, cookie or session. Pages whose popups have no such rule make no request. If the request fails or is turned away (it shares `trackingPerMinute`), those popups don't show.
+
+If your site adds to the cart by Ajax, tell Leads when it has, and popups whose trigger already fired but whose cart rule said no are checked again:
+
+```js
+window.dispatchEvent(new Event('leads:cart-changed'));
+```
 
 Inline forms (`leadsInline()`) follow the page, device, visitor and page-view rules and are hidden after a sign-up; "How often" and closing don't apply to them.
 
@@ -158,6 +173,12 @@ $popup->targetingRules = [
     'sources' => ['utm_campaign=spring-*', 'google.com'],
     'startDate' => '2026-11-27T05:00:00Z',   // ISO 8601, stored in UTC
     'endDate' => '2026-12-01T05:00:00Z',
+    'audience' => 'users',               // all | guests | users
+    'userGroups' => ['wholesale'],       // handles; any of them
+    'cart' => 'notEmpty',                // any | empty | notEmpty
+    'cartMin' => null,
+    'cartBelow' => 50,                   // item subtotal under 50
+    'cartCategories' => [12],            // category or structure entry IDs
 ];
 ```
 
@@ -174,6 +195,44 @@ Two overlays at once on someone's first page view hurt both. While the site's co
 - **Clean** — Light backgrounds, subtle styling: `clean-modal`, `clean-slidein`, `clean-bar`
 - **Bold** — Dark backgrounds, high contrast: `bold-modal`, `bold-slidein`, `bold-bar`
 - **Minimal** — Stripped down, content-first: `minimal-modal`, `minimal-inline`
+
+### Your own designs
+
+Each template directly in `templates/_leads/` (the folder is **Settings → Designs**) is offered in the popup editor's **Template** menu under *Site templates*, beside the built-in ones. Editors pick one per popup. Templates whose names start with `_` are left out, so partials can live alongside.
+
+A design gets:
+
+| Variable | |
+|---|---|
+| `popup` | The popup: `heading`, `bodyText`, `buttonText`, `buttonColor`, `backgroundColor`, `backgroundImage`, `position`, `popupType`, `id` |
+| `form` | The sign-up form, ready made: the fields, the consent box and the button, wired for the page script |
+| `fields` | The form's fields (`type`, `name`, `placeholder`, `required`), if you'd rather write the form yourself |
+| `consent` | `checkbox`, `required`, `html` (the wording, links and all) |
+| `success` | The thank-you text, or "check your inbox" when the popup uses double opt-in |
+
+What the page script needs from it:
+
+- **One root element.** That element is what's shown and hidden. Put any `<style>` inside it, not before it.
+- `data-leads-close` on whatever closes it.
+- A `.leads-success` element, hidden, for after a sign-up.
+- Keep the `leads-popup leads-modal` (or `leads-slidein`, `leads-bar`, `leads-inline`) classes on the root if you want Leads' positioning and transitions; leave them off to do your own.
+- If you write the form yourself: `data-leads-form` on the `<form>`, a hidden `popupId` input, and `.leads-btn` on the submit button.
+
+```twig
+{# templates/_leads/split-signup.twig #}
+<div class="leads-popup leads-modal split-signup" data-leads-id="{{ popup.id }}">
+    <button class="leads-close" data-leads-close aria-label="{{ 'Close'|t }}">&times;</button>
+    {% if popup.backgroundImage %}<img src="{{ popup.backgroundImage }}" alt="">{% endif %}
+    <div>
+        <h2>{{ popup.heading }}</h2>
+        <p>{{ popup.bodyText }}</p>
+        {{ form }}
+        <div class="leads-success" style="display:none">{{ success }}</div>
+    </div>
+</div>
+```
+
+Saving a popup renders its design once, so a Twig error shows in the editor instead of on the site.
 
 ## Email Integrations
 

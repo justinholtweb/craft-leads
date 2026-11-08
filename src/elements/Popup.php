@@ -21,7 +21,12 @@ class Popup extends Element
 {
     public string $popupType = 'modal';
     public string $triggerType = 'time';
-    public ?string $triggerValue = '3';
+    /**
+     * Blank by default: the page script then waits 3 seconds for a time trigger, 50% for scroll
+     * and 30 seconds for idle, and an exit-intent popup has no fallback on phones. (The editor
+     * offers 3 to a new popup.)
+     */
+    public ?string $triggerValue = null;
     public ?string $templateKey = 'clean-modal';
     public ?string $heading = null;
     public ?string $bodyText = null;
@@ -250,8 +255,61 @@ class Popup extends Element
         $rules[] = [['integrationSettings'], 'validateIntegrationSettings', 'skipOnEmpty' => false];
         $rules[] = [['targetingRules'], 'validateTargetingRules', 'skipOnEmpty' => false];
         $rules[] = [['consentSettings'], 'validateConsentSettings', 'skipOnEmpty' => false];
+        $rules[] = [['templateKey'], 'validateDesign', 'skipOnEmpty' => false];
+        $rules[] = [['triggerValue'], 'validateExitFallback', 'skipOnEmpty' => false];
 
         return $rules;
+    }
+
+    /**
+     * Refuses a design that isn't one — a built-in name Leads doesn't ship, a site template that
+     * isn't in the designs folder — and renders a site design once, so a Twig error shows here
+     * rather than as a popup that quietly never appears.
+     */
+    public function validateDesign(string $attribute): void
+    {
+        $renderer = \justinholtweb\leads\Plugin::getInstance()->renderer;
+        $key = (string)$this->templateKey;
+
+        if ($key === '') {
+            $this->templateKey = 'clean-modal';
+
+            return;
+        }
+
+        if (!$renderer->isDesign($key)) {
+            $this->addError($attribute, Craft::t('leads', 'Choose one of the designs.'));
+
+            return;
+        }
+
+        if (str_starts_with($key, \justinholtweb\leads\services\Renderer::SITE_PREFIX)) {
+            try {
+                $html = $renderer->renderPopup($this, true);
+            } catch (\Throwable $e) {
+                $this->addError($attribute, Craft::t('leads', 'The design couldn’t be rendered: {error}', ['error' => $e->getMessage()]));
+
+                return;
+            }
+            if (!preg_match('/^\s*(<!--.*?-->\s*)*<(?!style|script|link)[a-z]/is', $html)) {
+                $this->addError($attribute, Craft::t('leads', 'The design has to start with the popup’s one root element (a `<div>`, say), with any `<style>` inside it.'));
+            }
+        }
+    }
+
+    /**
+     * An exit-intent popup's trigger value is its fallback on phones and tablets: show after this
+     * many seconds if the visitor never scrolls back up. Blank for no fallback.
+     */
+    public function validateExitFallback(string $attribute): void
+    {
+        if ($this->triggerType !== 'exit' || $this->triggerValue === null || $this->triggerValue === '') {
+            return;
+        }
+
+        if (!ctype_digit($this->triggerValue) || (int)$this->triggerValue < 1 || (int)$this->triggerValue > 600) {
+            $this->addError($attribute, Craft::t('leads', 'The fallback has to be a whole number of seconds from 1 to 600, or blank for none.'));
+        }
     }
 
     /**
@@ -276,8 +334,19 @@ class Popup extends Element
      */
     public function validateTargetingRules(string $attribute): void
     {
-        foreach (Targeting::problems($this->getTargeting()) as $problem) {
+        $rules = $this->getTargeting();
+        foreach (Targeting::problems($rules) as $problem) {
             $this->addError($attribute, Craft::t('leads', $problem));
+        }
+
+        // What the pure rules can't know: which groups there are, and whether there's a cart.
+        $groups = array_map(static fn($group) => $group->handle, Craft::$app->getUserGroups()->getAllGroups());
+        $unknown = array_diff($rules['userGroups'], $groups);
+        if ($unknown !== []) {
+            $this->addError($attribute, Craft::t('leads', 'There’s no user group “{handle}”.', ['handle' => reset($unknown)]));
+        }
+        if (in_array('cart', Targeting::needs($rules), true) && !\justinholtweb\leads\helpers\CartBridge::commerceIsActive()) {
+            $this->addError($attribute, Craft::t('leads', 'Cart rules need Craft Commerce.'));
         }
     }
 
